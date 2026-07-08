@@ -6,6 +6,7 @@ public static class WindowSnapService
 {
     private const double SnapDistance = 16;
     private const double WidgetGap = 16;
+    private const double ShadowPadding = 8;
 
     public static void SnapToScreen(Window window)
     {
@@ -15,10 +16,10 @@ public static class WindowSnapService
         double topEdge = SystemParameters.VirtualScreenTop;
         double rightEdge = SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth;
         double bottomEdge = SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight;
-        double leftSnapPosition = leftEdge + WidgetGap;
-        double topSnapPosition = topEdge + WidgetGap;
-        double rightSnapPosition = rightEdge - WidgetGap;
-        double bottomSnapPosition = bottomEdge - WidgetGap;
+        double leftSnapPosition = leftEdge + WidgetGap - ShadowPadding;
+        double topSnapPosition = topEdge + WidgetGap - ShadowPadding;
+        double rightSnapPosition = rightEdge - WidgetGap + ShadowPadding;
+        double bottomSnapPosition = bottomEdge - WidgetGap + ShadowPadding;
 
         double width = GetWindowWidth(window);
         double height = GetWindowHeight(window);
@@ -58,13 +59,93 @@ public static class WindowSnapService
 
     public static void KeepWindowOnScreen(Window window)
     {
-        double minLeft = SystemParameters.VirtualScreenLeft;
-        double minTop = SystemParameters.VirtualScreenTop;
-        double maxLeft = SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - GetWindowWidth(window);
-        double maxTop = SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - GetWindowHeight(window);
+        double minLeft = SystemParameters.VirtualScreenLeft + WidgetGap - ShadowPadding;
+        double minTop = SystemParameters.VirtualScreenTop + WidgetGap - ShadowPadding;
+        double maxLeft = SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - GetWindowWidth(window) - WidgetGap + ShadowPadding;
+        double maxTop = SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - GetWindowHeight(window) - WidgetGap + ShadowPadding;
 
         window.Left = Math.Clamp(window.Left, minLeft, maxLeft);
         window.Top = Math.Clamp(window.Top, minTop, maxTop);
+    }
+
+    public static void SnapResize(Window window)
+    {
+        double width = GetWindowWidth(window);
+        double height = GetWindowHeight(window);
+        double right = window.Left + width;
+        double bottom = window.Top + height;
+        double targetWidth = width;
+        double targetHeight = height;
+        bool verticalGuide = false;
+        bool horizontalGuide = false;
+
+        double screenRightTarget = SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - WidgetGap + ShadowPadding;
+        double screenBottomTarget = SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - WidgetGap + ShadowPadding;
+
+        if (IsNear(right, screenRightTarget))
+        {
+            targetWidth = Math.Max(window.MinWidth, screenRightTarget - window.Left);
+            verticalGuide = true;
+        }
+
+        if (IsNear(bottom, screenBottomTarget))
+        {
+            targetHeight = Math.Max(window.MinHeight, screenBottomTarget - window.Top);
+            horizontalGuide = true;
+        }
+
+        foreach (Window otherWindow in Application.Current.Windows)
+        {
+            if (ReferenceEquals(window, otherWindow)
+                || !otherWindow.IsVisible
+                || !IsWidgetWindow(otherWindow))
+            {
+                continue;
+            }
+
+            double otherRight = otherWindow.Left + GetWindowWidth(otherWindow);
+            double otherBottom = otherWindow.Top + GetWindowHeight(otherWindow);
+
+            if (RangesTouchOrOverlap(window.Top, bottom, otherWindow.Top, otherBottom))
+            {
+                if (TryGetResizeTarget(right, otherWindow.Left, window.Left, window.MinWidth, ref targetWidth)
+                    || TryGetResizeTarget(right, otherRight, window.Left, window.MinWidth, ref targetWidth))
+                {
+                    verticalGuide = true;
+                }
+            }
+
+            if (RangesTouchOrOverlap(window.Left, right, otherWindow.Left, otherRight))
+            {
+                if (TryGetResizeTarget(bottom, otherWindow.Top, window.Top, window.MinHeight, ref targetHeight)
+                    || TryGetResizeTarget(bottom, otherBottom, window.Top, window.MinHeight, ref targetHeight))
+                {
+                    horizontalGuide = true;
+                }
+            }
+        }
+
+        if (Math.Abs(targetWidth - width) > 0.5)
+        {
+            window.Width = targetWidth;
+        }
+
+        if (Math.Abs(targetHeight - height) > 0.5)
+        {
+            window.Height = targetHeight;
+        }
+
+        KeepWindowOnScreen(window);
+
+        if (verticalGuide)
+        {
+            SnapGuideService.ShowVertical(window.Left + GetWindowWidth(window) - ShadowPadding);
+        }
+
+        if (horizontalGuide)
+        {
+            SnapGuideService.ShowHorizontal(window.Top + GetWindowHeight(window) - ShadowPadding);
+        }
     }
 
     private static void SnapToOtherWidgets(Window movingWindow)
@@ -93,14 +174,14 @@ public static class WindowSnapService
 
             if (RangesTouchOrOverlap(movingWindow.Top, movingBottom, otherWindow.Top, otherBottom))
             {
-                TrySetCloserCandidate(ref horizontalCandidate, movingWindow.Left, otherRight + WidgetGap);
-                TrySetCloserCandidate(ref horizontalCandidate, movingRight, otherWindow.Left - WidgetGap, otherWindow.Left - WidgetGap - movingWidth);
+                TrySetCloserCandidate(ref horizontalCandidate, movingWindow.Left, otherRight + WidgetGap - (ShadowPadding * 2));
+                TrySetCloserCandidate(ref horizontalCandidate, movingRight, otherWindow.Left - WidgetGap + (ShadowPadding * 2), otherWindow.Left - WidgetGap + (ShadowPadding * 2) - movingWidth);
             }
 
             if (RangesTouchOrOverlap(movingWindow.Left, movingRight, otherWindow.Left, otherRight))
             {
-                TrySetCloserCandidate(ref verticalCandidate, movingWindow.Top, otherBottom + WidgetGap);
-                TrySetCloserCandidate(ref verticalCandidate, movingBottom, otherWindow.Top - WidgetGap, otherWindow.Top - WidgetGap - movingHeight);
+                TrySetCloserCandidate(ref verticalCandidate, movingWindow.Top, otherBottom + WidgetGap - (ShadowPadding * 2));
+                TrySetCloserCandidate(ref verticalCandidate, movingBottom, otherWindow.Top - WidgetGap + (ShadowPadding * 2), otherWindow.Top - WidgetGap + (ShadowPadding * 2) - movingHeight);
             }
         }
 
@@ -117,7 +198,14 @@ public static class WindowSnapService
 
     private static bool IsWidgetWindow(Window window)
     {
-        return window is MainWindow or FolderWidgetWindow or MediaWidgetWindow or WeatherWidgetWindow;
+        return window is MainWindow
+            or FolderWidgetWindow
+            or MediaWidgetWindow
+            or WeatherWidgetWindow
+            or AlarmWidgetWindow
+            or TimerWidgetWindow
+            or AiSearchWidgetWindow
+            or CalendarWidgetWindow;
     }
 
     private static bool RangesTouchOrOverlap(double firstStart, double firstEnd, double secondStart, double secondEnd)
@@ -146,6 +234,22 @@ public static class WindowSnapService
         {
             candidate = new SnapCandidate(targetPosition, distance);
         }
+    }
+
+    private static bool TryGetResizeTarget(
+        double currentEdge,
+        double targetEdge,
+        double fixedEdge,
+        double minSize,
+        ref double targetSize)
+    {
+        if (!IsNear(currentEdge, targetEdge))
+        {
+            return false;
+        }
+
+        targetSize = Math.Max(minSize, targetEdge - fixedEdge);
+        return true;
     }
 
     private static double GetWindowWidth(Window window)

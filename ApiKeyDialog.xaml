@@ -1,0 +1,60 @@
+<Window x:Class="TimeWidget.ApiKeyDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="API Key"
+        Width="360"
+        Height="170"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+    <Border CornerRadius="18"
+            Background="#1F1E33"
+            BorderBrush="#3A4658"
+            BorderThickness="1"
+            Padding="18"
+            MouseLeftButtonDown="Window_MouseLeftButtonDown">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="12" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock FontFamily="MiSans"
+                       FontSize="18"
+                       FontWeight="Bold"
+                       Foreground="#EAF3FF"
+                       Text="OpenAI API Key" />
+            <PasswordBox x:Name="ApiKeyBox"
+                         Grid.Row="2"
+                         Height="30"
+                         Background="#273142"
+                         BorderBrush="#3A4658"
+                         Foreground="#EAF3FF"
+                         FontFamily="MiSans"
+                         Padding="8,4" />
+            <TextBlock x:Name="ErrorText"
+                       Grid.Row="3"
+                       Margin="0,8,0,0"
+                       FontFamily="MiSans"
+                       FontSize="12"
+                       Foreground="#FF8A8A" />
+            <StackPanel Grid.Row="4"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <Button Content="Cancel"
+                        Padding="12,5"
+                        Click="CancelButton_Click" />
+                <Button Content="Save"
+                        Margin="8,0,0,0"
+                        Padding="12,5"
+                        Click="SaveButton_Click" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

@@ -26,6 +26,7 @@ public partial class WeatherWidgetWindow : Window
     private DateTimeOffset _lastManualRefresh = DateTimeOffset.MinValue;
     private bool _isRefreshing;
     private bool _isClosed;
+    private bool _isLoaded;
 
     public WeatherWidgetWindow()
     {
@@ -44,11 +45,19 @@ public partial class WeatherWidgetWindow : Window
         Topmost = _settings.WeatherTopmost;
         TopmostMenuItem.IsChecked = _settings.WeatherTopmost;
         LockMenuItem.IsChecked = _settings.WeatherIsLocked;
+        ResizeMenuItem.IsChecked = _settings.WeatherIsResizable;
+        ApplyResizeMode();
+        if (_settings.WeatherWidth.HasValue && _settings.WeatherHeight.HasValue)
+        {
+            Width = _settings.WeatherWidth.Value;
+            Height = _settings.WeatherHeight.Value;
+        }
         RestorePosition();
 
         _currentCity = ChinaWeatherCityCatalog.FindByCode(_settings.WeatherCityCode);
         await LoadInitialWeatherAsync();
         _refreshTimer.Start();
+        _isLoaded = true;
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)
@@ -83,6 +92,24 @@ public partial class WeatherWidgetWindow : Window
     private void LockMenuItem_Click(object sender, RoutedEventArgs e)
     {
         _settings.WeatherIsLocked = LockMenuItem.IsChecked;
+        SaveSettings();
+    }
+
+    private void ResizeMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.WeatherIsResizable = ResizeMenuItem.IsChecked;
+        ApplyResizeMode();
+        SaveSettings();
+    }
+
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!_isLoaded || !_settings.WeatherIsResizable)
+        {
+            return;
+        }
+
+        WindowSnapService.SnapResize(this);
         SaveSettings();
     }
 
@@ -297,8 +324,11 @@ public partial class WeatherWidgetWindow : Window
         {
             settings.WeatherLeft = Left;
             settings.WeatherTop = Top;
+            settings.WeatherWidth = Width;
+            settings.WeatherHeight = Height;
             settings.WeatherTopmost = Topmost;
             settings.WeatherIsLocked = LockMenuItem.IsChecked;
+            settings.WeatherIsResizable = ResizeMenuItem.IsChecked;
             settings.WeatherLocationDenied = _settings.WeatherLocationDenied;
             settings.WeatherCityCode = _settings.WeatherCityCode;
             settings.WeatherCityName = _settings.WeatherCityName;
@@ -308,6 +338,13 @@ public partial class WeatherWidgetWindow : Window
     private void KeepWindowOnScreen()
     {
         WindowSnapService.KeepWindowOnScreen(this);
+    }
+
+    private void ApplyResizeMode()
+    {
+        MinWidth = 320;
+        MinHeight = 260;
+        ResizeMode = _settings.WeatherIsResizable ? ResizeMode.CanResizeWithGrip : ResizeMode.NoResize;
     }
 
     private static Brush GetAlertBackgroundBrush(AlertLevel level)

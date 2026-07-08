@@ -10,11 +10,11 @@ none
 false
 TRACE;DEBUG;NET;NET9_0;NETCOREAPP;WINDOWS;WINDOWS10_0_19041_0;NET5_0_OR_GREATER;NET6_0_OR_GREATER;NET7_0_OR_GREATER;NET8_0_OR_GREATER;NET9_0_OR_GREATER;NETCOREAPP3_0_OR_GREATER;NETCOREAPP3_1_OR_GREATER;WINDOWS10_0_19041_0_OR_GREATER;WINDOWS10_0_18362_0_OR_GREATER;WINDOWS10_0_17763_0_OR_GREATER;WINDOWS8_0_OR_GREATER;WINDOWS7_0_OR_GREATER
 C:\Users\35515\Documents\Codex\2026-07-08\w\TimeWidget\App.xaml
-4-1809748847
+12-1917262970
 
-26-1050952638
+45-293294990
 2181277550179
-FolderWidgetWindow.xaml;MainWindow.xaml;MediaWidgetWindow.xaml;WeatherWidgetWindow.xaml;
+AiSearchWidgetWindow.xaml;AlarmEditDialog.xaml;AlarmRingingWindow.xaml;AlarmWidgetWindow.xaml;ApiKeyDialog.xaml;CalendarEventEditDialog.xaml;CalendarWidgetWindow.xaml;FolderWidgetWindow.xaml;MainWindow.xaml;MediaWidgetWindow.xaml;TimerWidgetWindow.xaml;WeatherWidgetWindow.xaml;
 
 False
 

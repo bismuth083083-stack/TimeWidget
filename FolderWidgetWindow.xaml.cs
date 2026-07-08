@@ -21,6 +21,7 @@ public partial class FolderWidgetWindow : Window
     private string? _currentFolderPath;
     private int _scanVersion;
     private bool _isClosed;
+    private bool _isLoaded;
 
     public ObservableCollection<FolderFileItem> Files { get; } = [];
 
@@ -46,6 +47,13 @@ public partial class FolderWidgetWindow : Window
         Topmost = _settings.FolderTopmost;
         TopmostMenuItem.IsChecked = _settings.FolderTopmost;
         LockMenuItem.IsChecked = _settings.FolderIsLocked;
+        ResizeMenuItem.IsChecked = _settings.FolderIsResizable;
+        ApplyResizeMode();
+        if (_settings.FolderWidth.HasValue && _settings.FolderHeight.HasValue)
+        {
+            Width = _settings.FolderWidth.Value;
+            Height = _settings.FolderHeight.Value;
+        }
         RestorePosition();
 
         if (!string.IsNullOrWhiteSpace(_settings.FolderPath))
@@ -56,6 +64,8 @@ public partial class FolderWidgetWindow : Window
         {
             ShowStatus("Choose a folder to see recently modified files.");
         }
+
+        _isLoaded = true;
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)
@@ -91,6 +101,24 @@ public partial class FolderWidgetWindow : Window
     private void LockMenuItem_Click(object sender, RoutedEventArgs e)
     {
         _settings.FolderIsLocked = LockMenuItem.IsChecked;
+        SaveSettings();
+    }
+
+    private void ResizeMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.FolderIsResizable = ResizeMenuItem.IsChecked;
+        ApplyResizeMode();
+        SaveSettings();
+    }
+
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!_isLoaded || !_settings.FolderIsResizable)
+        {
+            return;
+        }
+
+        WindowSnapService.SnapResize(this);
         SaveSettings();
     }
 
@@ -392,14 +420,24 @@ public partial class FolderWidgetWindow : Window
             settings.FolderPath = _currentFolderPath;
             settings.FolderLeft = Left;
             settings.FolderTop = Top;
+            settings.FolderWidth = Width;
+            settings.FolderHeight = Height;
             settings.FolderTopmost = Topmost;
             settings.FolderIsLocked = LockMenuItem.IsChecked;
+            settings.FolderIsResizable = ResizeMenuItem.IsChecked;
         });
     }
 
     private void KeepWindowOnScreen()
     {
         WindowSnapService.KeepWindowOnScreen(this);
+    }
+
+    private void ApplyResizeMode()
+    {
+        MinWidth = 320;
+        MinHeight = 320;
+        ResizeMode = _settings.FolderIsResizable ? ResizeMode.CanResizeWithGrip : ResizeMode.NoResize;
     }
 
     private void ShowStatus(string message)

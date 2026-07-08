@@ -25,6 +25,7 @@ public partial class MediaWidgetWindow : Window
     private GlobalSystemMediaTransportControlsSession? _currentSession;
     private WidgetSettings _settings = new();
     private bool _isClosed;
+    private bool _isLoaded;
 
     public MediaWidgetWindow()
     {
@@ -63,6 +64,13 @@ public partial class MediaWidgetWindow : Window
         Topmost = _settings.MediaTopmost;
         TopmostMenuItem.IsChecked = _settings.MediaTopmost;
         LockMenuItem.IsChecked = _settings.MediaIsLocked;
+        ResizeMenuItem.IsChecked = _settings.MediaIsResizable;
+        ApplyResizeMode();
+        if (_settings.MediaWidth.HasValue && _settings.MediaHeight.HasValue)
+        {
+            Width = _settings.MediaWidth.Value;
+            Height = _settings.MediaHeight.Value;
+        }
         RestorePosition();
 
         _audioSpectrumService.Start();
@@ -71,6 +79,7 @@ public partial class MediaWidgetWindow : Window
 
         await InitializeMediaSessionAsync();
         _mediaRefreshTimer.Start();
+        _isLoaded = true;
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)
@@ -112,6 +121,33 @@ public partial class MediaWidgetWindow : Window
     {
         _settings.MediaIsLocked = LockMenuItem.IsChecked;
         SaveSettings();
+    }
+
+    private void ResizeMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.MediaIsResizable = ResizeMenuItem.IsChecked;
+        ApplyResizeMode();
+        SaveSettings();
+    }
+
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!_isLoaded || !_settings.MediaIsResizable)
+        {
+            return;
+        }
+
+        WindowSnapService.SnapResize(this);
+        SaveSettings();
+    }
+
+    private void MediaContentGrid_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        Rect roundedBounds = new(0, 0, MediaContentGrid.ActualWidth, MediaContentGrid.ActualHeight);
+        RectangleGeometry roundedClip = new(roundedBounds, 22, 22);
+        MediaContentGrid.Clip = roundedClip;
+        AlbumBlurBackground.Clip = roundedClip.Clone();
+        AlbumDimOverlay.Clip = roundedClip.Clone();
     }
 
     private async Task InitializeMediaSessionAsync()
@@ -269,6 +305,16 @@ public partial class MediaWidgetWindow : Window
             {
                 Stretch = Stretch.UniformToFill
             };
+            AlbumBlurBackground.Fill = new ImageBrush(image)
+            {
+                Stretch = Stretch.UniformToFill
+            };
+            AlbumBlurBackground.Visibility = Visibility.Visible;
+            AlbumDimOverlay.Visibility = Visibility.Visible;
+            TitleText.TextBrush = Brushes.White;
+            ArtistText.TextBrush = new SolidColorBrush(Color.FromArgb(0xE6, 0xF0, 0xF6, 0xFF));
+            PlaybackStatusText.Foreground = new SolidColorBrush(Color.FromArgb(0xCC, 0xF0, 0xF6, 0xFF));
+            SpectrumControl.BarBrush = new SolidColorBrush(Color.FromArgb(0xE8, 0xFF, 0xFF, 0xFF));
             AlbumArtPlaceholder.Visibility = Visibility.Collapsed;
         }
         catch
@@ -280,6 +326,13 @@ public partial class MediaWidgetWindow : Window
     private void ClearThumbnail()
     {
         AlbumArtShape.Fill = new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF));
+        AlbumBlurBackground.Fill = null;
+        AlbumBlurBackground.Visibility = Visibility.Collapsed;
+        AlbumDimOverlay.Visibility = Visibility.Collapsed;
+        TitleText.TextBrush = (Brush)FindResource("PrimaryText");
+        ArtistText.TextBrush = (Brush)FindResource("SecondaryText");
+        PlaybackStatusText.Foreground = (Brush)FindResource("SecondaryText");
+        SpectrumControl.BarBrush = new SolidColorBrush(Color.FromArgb(0xD8, 0xA7, 0xD8, 0xFF));
         AlbumArtPlaceholder.Visibility = Visibility.Visible;
     }
 
@@ -412,14 +465,24 @@ public partial class MediaWidgetWindow : Window
         {
             settings.MediaLeft = Left;
             settings.MediaTop = Top;
+            settings.MediaWidth = Width;
+            settings.MediaHeight = Height;
             settings.MediaTopmost = Topmost;
             settings.MediaIsLocked = LockMenuItem.IsChecked;
+            settings.MediaIsResizable = ResizeMenuItem.IsChecked;
         });
     }
 
     private void KeepWindowOnScreen()
     {
         WindowSnapService.KeepWindowOnScreen(this);
+    }
+
+    private void ApplyResizeMode()
+    {
+        MinWidth = 320;
+        MinHeight = 220;
+        ResizeMode = _settings.MediaIsResizable ? ResizeMode.CanResizeWithGrip : ResizeMode.NoResize;
     }
 
     private void UnsubscribeSessionManager()

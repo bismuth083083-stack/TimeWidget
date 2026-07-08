@@ -1,12 +1,11 @@
 <Window x:Class="TimeWidget.FolderWidgetWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:TimeWidget.Controls"
         Title="Files"
         Width="360"
-        Height="420"
-        MinWidth="320"
-        MinHeight="320"
-        ResizeMode="CanResizeWithGrip"
+        Height="480"
+        ResizeMode="NoResize"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -14,6 +13,7 @@
         Topmost="True"
         Loaded="Window_Loaded"
         Closing="Window_Closing"
+        SizeChanged="Window_SizeChanged"
         MouseLeftButtonDown="Window_MouseLeftButtonDown">
     <Window.ContextMenu>
         <ContextMenu>
@@ -26,11 +26,15 @@
                       Header="&#x9501;&#x5B9A;&#x4F4D;&#x7F6E;"
                       IsCheckable="True"
                       Click="LockMenuItem_Click" />
+            <MenuItem x:Name="ResizeMenuItem"
+                      Header="&#x5141;&#x8BB8;&#x8C03;&#x6574;&#x5927;&#x5C0F;"
+                      IsCheckable="True"
+                      Click="ResizeMenuItem_Click" />
         </ContextMenu>
     </Window.ContextMenu>
 
     <Window.Resources>
-        <SolidColorBrush x:Key="PanelBackground" Color="#FF151922" />
+        <SolidColorBrush x:Key="PanelBackground" Color="#FF1F1E33" />
         <SolidColorBrush x:Key="PanelBorder" Color="#33FFFFFF" />
         <SolidColorBrush x:Key="PrimaryText" Color="#F0EAF3FF" />
         <SolidColorBrush x:Key="SecondaryText" Color="#A8D8E6F2" />
@@ -47,6 +51,7 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="Bold" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource RoundedButtonFocusVisual}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -101,17 +106,17 @@
         </Style>
     </Window.Resources>
 
-    <Border Margin="10"
+    <Border Margin="8"
             CornerRadius="22"
             Background="{StaticResource PanelBackground}"
             BorderBrush="{StaticResource PanelBorder}"
             BorderThickness="1"
             SnapsToDevicePixels="True">
         <Border.Effect>
-            <DropShadowEffect BlurRadius="24"
-                              ShadowDepth="3"
+            <DropShadowEffect BlurRadius="14"
+                              ShadowDepth="2"
                               Direction="270"
-                              Opacity="0.32"
+                              Opacity="0.18"
                               Color="#000000" />
         </Border.Effect>
         <Grid Margin="18">
@@ -130,11 +135,15 @@
                 <StackPanel Grid.Column="0"
                             Margin="0,0,12,0">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Files"
-                                   FontFamily="MiSans"
-                                   FontSize="26"
-                                   FontWeight="Bold"
-                                   Foreground="{StaticResource PrimaryText}" />
+                        <controls:HighlightedTextBlock Height="32"
+                                                       FontFamily="MiSans"
+                                                       FontSize="26"
+                                                       FontWeight="Bold"
+                                                       Foreground="{StaticResource PrimaryText}"
+                                                       HighlightBrush="#FFFF0000"
+                                                       HighlightStart="0"
+                                                       HighlightLength="1"
+                                                       Text="Files" />
                         <TextBlock x:Name="FolderIconText"
                                    Margin="8,3,0,0"
                                    VerticalAlignment="Center"

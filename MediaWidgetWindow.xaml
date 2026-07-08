@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:TimeWidget.Controls"
         Title="Media"
-        Width="540"
-        Height="150"
+        Width="360"
+        Height="320"
         ResizeMode="NoResize"
         WindowStyle="None"
         AllowsTransparency="True"
@@ -13,6 +13,7 @@
         Topmost="True"
         Loaded="Window_Loaded"
         Closing="Window_Closing"
+        SizeChanged="Window_SizeChanged"
         MouseLeftButtonDown="Window_MouseLeftButtonDown">
     <Window.ContextMenu>
         <ContextMenu>
@@ -25,6 +26,10 @@
                       Header="&#x9501;&#x5B9A;&#x4F4D;&#x7F6E;"
                       IsCheckable="True"
                       Click="LockMenuItem_Click" />
+            <MenuItem x:Name="ResizeMenuItem"
+                      Header="&#x5141;&#x8BB8;&#x8C03;&#x6574;&#x5927;&#x5C0F;"
+                      IsCheckable="True"
+                      Click="ResizeMenuItem_Click" />
             <Separator />
             <MenuItem Header="Close"
                       Click="CloseMenuItem_Click" />
@@ -32,7 +37,7 @@
     </Window.ContextMenu>
 
     <Window.Resources>
-        <SolidColorBrush x:Key="PanelBackground" Color="#FF151922" />
+        <SolidColorBrush x:Key="PanelBackground" Color="#FF1F1E33" />
         <SolidColorBrush x:Key="PanelBorder" Color="#33FFFFFF" />
         <SolidColorBrush x:Key="PrimaryText" Color="#F0EAF3FF" />
         <SolidColorBrush x:Key="SecondaryText" Color="#A8D8E6F2" />
@@ -47,6 +52,7 @@
             <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource RoundedButtonFocusVisual}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -72,29 +78,50 @@
         </Style>
     </Window.Resources>
 
-    <Border Margin="10"
+    <Border x:Name="MediaRootBorder"
+            Margin="8"
             CornerRadius="22"
             Background="{StaticResource PanelBackground}"
             BorderBrush="{StaticResource PanelBorder}"
             BorderThickness="1"
             SnapsToDevicePixels="True">
         <Border.Effect>
-            <DropShadowEffect BlurRadius="18"
+            <DropShadowEffect BlurRadius="14"
                               ShadowDepth="2"
                               Direction="270"
-                              Opacity="0.28"
+                              Opacity="0.18"
                               Color="#000000" />
         </Border.Effect>
-        <Grid Margin="18,14">
+        <Grid x:Name="MediaContentGrid"
+              SizeChanged="MediaContentGrid_SizeChanged"
+              ClipToBounds="True">
+            <Rectangle x:Name="AlbumBlurBackground"
+                       RadiusX="22"
+                       RadiusY="22"
+                       Opacity="1"
+                       Visibility="Collapsed"
+                       IsHitTestVisible="False">
+                <Rectangle.Effect>
+                    <BlurEffect Radius="35" />
+                </Rectangle.Effect>
+            </Rectangle>
+            <Rectangle x:Name="AlbumDimOverlay"
+                       RadiusX="22"
+                       RadiusY="22"
+                       Fill="#99000000"
+                       Visibility="Collapsed"
+                       IsHitTestVisible="False" />
+        <Grid Margin="18">
             <Grid.RowDefinitions>
+                <RowDefinition Height="92" />
+                <RowDefinition Height="42" />
                 <RowDefinition Height="*" />
-                <RowDefinition Height="34" />
+                <RowDefinition Height="84" />
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="74" />
                 <ColumnDefinition Width="14" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="192" />
             </Grid.ColumnDefinitions>
 
             <Grid Grid.Row="0"
@@ -161,16 +188,9 @@
                            Visibility="Collapsed" />
             </StackPanel>
 
-            <controls:SpectrumBarsControl x:Name="SpectrumControl"
-                                          Grid.Row="0"
-                                          Grid.Column="3"
-                                          Height="42"
-                                          BarBrush="#D8A7D8FF"
-                                          VerticalAlignment="Center" />
-
             <StackPanel Grid.Row="1"
                         Grid.Column="0"
-                        Grid.ColumnSpan="4"
+                        Grid.ColumnSpan="3"
                         Orientation="Horizontal"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center">
@@ -187,6 +207,15 @@
                         Click="NextButton_Click" />
             </StackPanel>
 
+            <controls:SpectrumBarsControl x:Name="SpectrumControl"
+                                          Grid.Row="3"
+                                          Grid.Column="0"
+                                          Grid.ColumnSpan="3"
+                                          Height="76"
+                                          BarBrush="#D8A7D8FF"
+                                          VerticalAlignment="Center" />
+
+        </Grid>
         </Grid>
     </Border>
 </Window>

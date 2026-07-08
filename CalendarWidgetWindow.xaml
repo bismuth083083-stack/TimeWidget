@@ -1,0 +1,289 @@
+<Window x:Class="TimeWidget.CalendarWidgetWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:TimeWidget.Controls"
+        Title="Calendar"
+        Width="360"
+        Height="480"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Loaded="Window_Loaded"
+        Closing="Window_Closing"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+    <Window.ContextMenu>
+        <ContextMenu>
+            <MenuItem x:Name="TopmostMenuItem"
+                      Header="置顶"
+                      IsCheckable="True"
+                      IsChecked="True"
+                      Click="TopmostMenuItem_Click" />
+            <MenuItem x:Name="LockMenuItem"
+                      Header="锁定位置"
+                      IsCheckable="True"
+                      Click="LockMenuItem_Click" />
+            <Separator />
+            <MenuItem Header="回到今天"
+                      Click="TodayMenuItem_Click" />
+            <MenuItem Header="新增日程"
+                      Click="AddEventMenuItem_Click" />
+            <MenuItem Header="退出"
+                      Click="ExitMenuItem_Click" />
+        </ContextMenu>
+    </Window.ContextMenu>
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="MainBackground" Color="#1F1E33" />
+        <SolidColorBrush x:Key="SecondaryBackground" Color="#273142" />
+        <SolidColorBrush x:Key="HoverBackground" Color="#303B4F" />
+        <SolidColorBrush x:Key="SelectedBackground" Color="#36506C" />
+        <SolidColorBrush x:Key="TodayAccent" Color="#A7D8FF" />
+        <SolidColorBrush x:Key="RedAccent" Color="#FFFF0000" />
+        <SolidColorBrush x:Key="PrimaryText" Color="#EAF3FF" />
+        <SolidColorBrush x:Key="SecondaryText" Color="#AAB8C8" />
+        <SolidColorBrush x:Key="MutedText" Color="#7F8EA3" />
+        <SolidColorBrush x:Key="BorderBrush" Color="#3A4658" />
+
+        <Style x:Key="CalendarButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource SecondaryBackground}" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="9,5" />
+            <Setter Property="FontFamily" Value="MiSans" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource RoundedButtonFocusVisual}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="11">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource HoverBackground}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="EventIconButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="#66303B4F" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontFamily" Value="MiSans" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource RoundedButtonFocusVisual}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="9">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Tag" Value="Edit">
+                                <Setter Property="Background" Value="#6647A7FF" />
+                                <Setter Property="Foreground" Value="#D8ECFFFF" />
+                                <Setter Property="BorderBrush" Value="#8847A7FF" />
+                            </Trigger>
+                            <Trigger Property="Tag" Value="Delete">
+                                <Setter Property="Background" Value="#66FF3B3B" />
+                                <Setter Property="Foreground" Value="#FFFFD8D8" />
+                                <Setter Property="BorderBrush" Value="#88FF3B3B" />
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                    <Condition Property="Tag" Value="Edit" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#8847A7FF" />
+                            </MultiTrigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                    <Condition Property="Tag" Value="Delete" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#88FF3B3B" />
+                            </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border CornerRadius="22"
+            Background="{StaticResource MainBackground}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1"
+            Padding="16">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="40" />
+                <RowDefinition Height="24" />
+                <RowDefinition Height="228" />
+                <RowDefinition Height="10" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0">
+                <controls:HighlightedTextBlock x:Name="MonthTitleText"
+                                               VerticalAlignment="Center"
+                                               Height="27"
+                                               FontFamily="MiSans"
+                                               FontSize="21"
+                                               FontWeight="Bold"
+                                               Foreground="{StaticResource PrimaryText}"
+                                               HighlightBrush="{StaticResource RedAccent}"
+                                               HighlightStart="0"
+                                               HighlightLength="3" />
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center">
+                    <Button Content="&lt;"
+                            Width="30"
+                            Style="{StaticResource CalendarButtonStyle}"
+                            Click="PreviousMonthButton_Click" />
+                    <Button Content="&gt;"
+                            Width="30"
+                            Margin="6,0"
+                            Style="{StaticResource CalendarButtonStyle}"
+                            Click="NextMonthButton_Click" />
+                    <Button Content="Today"
+                            Style="{StaticResource CalendarButtonStyle}"
+                            Click="TodayButton_Click" />
+                </StackPanel>
+            </Grid>
+
+            <UniformGrid Grid.Row="1" Columns="7">
+                <TextBlock Text="Mon" Foreground="{StaticResource SecondaryText}" FontFamily="MiSans" FontWeight="Bold" HorizontalAlignment="Center" />
+                <TextBlock Text="Tue" Foreground="{StaticResource SecondaryText}" FontFamily="MiSans" FontWeight="Bold" HorizontalAlignment="Center" />
+                <TextBlock Text="Wed" Foreground="{StaticResource SecondaryText}" FontFamily="MiSans" FontWeight="Bold" HorizontalAlignment="Center" />
+                <TextBlock Text="Thu" Foreground="{StaticResource SecondaryText}" FontFamily="MiSans" FontWeight="Bold" HorizontalAlignment="Center" />
+                <TextBlock Text="Fri" Foreground="{StaticResource SecondaryText}" FontFamily="MiSans" FontWeight="Bold" HorizontalAlignment="Center" />
+                <TextBlock Text="Sat" Foreground="{StaticResource MutedText}" FontFamily="MiSans" FontWeight="Bold" HorizontalAlignment="Center" />
+                <TextBlock Text="Sun" Foreground="{StaticResource MutedText}" FontFamily="MiSans" FontWeight="Bold" HorizontalAlignment="Center" />
+            </UniformGrid>
+
+            <UniformGrid x:Name="CalendarDaysGrid"
+                         Grid.Row="2"
+                         Columns="7"
+                         Rows="6" />
+
+            <TextBlock x:Name="SelectedDateText"
+                       Grid.Row="4"
+                       FontFamily="MiSans"
+                       FontSize="15"
+                       FontWeight="Bold"
+                       Foreground="{StaticResource PrimaryText}" />
+
+            <Grid Grid.Row="5" Margin="0,8,0,0">
+                <TextBlock x:Name="NoEventsText"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           FontFamily="MiSans"
+                           FontSize="13"
+                           FontWeight="Bold"
+                           Foreground="{StaticResource MutedText}"
+                           Text="No events" />
+                <ListBox x:Name="EventsListBox"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         MouseDoubleClick="EventsListBox_MouseDoubleClick"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="Margin" Value="0" />
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,0,7"
+                                    Padding="9"
+                                    CornerRadius="14"
+                                    Background="{StaticResource SecondaryBackground}"
+                                    BorderBrush="{StaticResource BorderBrush}"
+                                    BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="42" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="64" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               VerticalAlignment="Top"
+                                               FontFamily="MiSans"
+                                               FontSize="12"
+                                               FontWeight="Bold"
+                                               Foreground="{StaticResource TodayAccent}"
+                                               Text="{Binding TimeText}" />
+                                    <StackPanel Grid.Column="1" Margin="2,0,8,0">
+                                        <TextBlock FontFamily="MiSans"
+                                                   FontSize="13"
+                                                   FontWeight="Bold"
+                                                   Foreground="{StaticResource PrimaryText}"
+                                                   Text="{Binding Title}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   TextWrapping="NoWrap" />
+                                        <TextBlock FontFamily="MiSans"
+                                                   FontSize="11"
+                                                   FontWeight="Bold"
+                                                   Foreground="{StaticResource SecondaryText}"
+                                                   Text="{Binding Description}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   TextWrapping="NoWrap" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2"
+                                                Orientation="Horizontal"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Top">
+                                        <Button Content="E"
+                                                Tag="Edit"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource EventIconButtonStyle}"
+                                                Click="EditEventButton_Click" />
+                                        <Button Content="X"
+                                                Tag="Delete"
+                                                CommandParameter="{Binding}"
+                                                Margin="6,0,0,0"
+                                                Style="{StaticResource EventIconButtonStyle}"
+                                                Click="DeleteEventButton_Click" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

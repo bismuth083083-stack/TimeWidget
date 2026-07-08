@@ -13,6 +13,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _timer;
     private readonly IFolderWidgetWindowFactory _folderWidgetWindowFactory = new FolderWidgetWindowFactory();
     private WidgetSettings _settings = new();
+    private bool _isLoaded;
 
     public MainWindow()
     {
@@ -32,6 +33,14 @@ public partial class MainWindow : Window
         Topmost = _settings.Topmost;
         TopmostMenuItem.IsChecked = _settings.Topmost;
         LockMenuItem.IsChecked = _settings.IsLocked;
+        ResizeMenuItem.IsChecked = _settings.IsResizable;
+        ApplyResizeMode();
+
+        if (_settings.Width.HasValue && _settings.Height.HasValue)
+        {
+            Width = _settings.Width.Value;
+            Height = _settings.Height.Value;
+        }
 
         if (_settings.Left.HasValue && _settings.Top.HasValue)
         {
@@ -42,6 +51,7 @@ public partial class MainWindow : Window
 
         UpdateClock();
         _timer.Start();
+        _isLoaded = true;
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)
@@ -77,6 +87,13 @@ public partial class MainWindow : Window
         SaveSettings();
     }
 
+    private void ResizeMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.IsResizable = ResizeMenuItem.IsChecked;
+        ApplyResizeMode();
+        SaveSettings();
+    }
+
     private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
     {
         Close();
@@ -100,11 +117,60 @@ public partial class MainWindow : Window
         weatherWidgetWindow.Show();
     }
 
+    private void OpenAlarmMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        AlarmWidgetWindow alarmWidgetWindow = new();
+        alarmWidgetWindow.Show();
+    }
+
+    private void OpenTimerMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        TimerWidgetWindow timerWidgetWindow = new();
+        timerWidgetWindow.Show();
+    }
+
+    private void OpenAiSearchMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        AiSearchWidgetWindow aiSearchWidgetWindow = new();
+        aiSearchWidgetWindow.Show();
+    }
+
+    private void OpenCalendarMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        CalendarWidgetWindow calendarWidgetWindow = new();
+        calendarWidgetWindow.Show();
+    }
+
     private void UpdateClock()
     {
         DateTime now = DateTime.Now;
-        TimeText.Text = now.ToString("HH:mm", CultureInfo.InvariantCulture);
-        DateText.Text = now.ToString("yyyy/MM/dd dddd", CultureInfo.InvariantCulture);
+        string timeText = now.ToString("HH:mm", CultureInfo.InvariantCulture);
+        string weekday = now.ToString("dddd", CultureInfo.InvariantCulture);
+        string datePrefix = $"{now.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture)} ";
+        TimeText.Text = timeText;
+        TimeText.HighlightStart = 0;
+        TimeText.HighlightLength = 1;
+        DateText.Text = $"{datePrefix}{weekday}";
+        DateText.HighlightStart = datePrefix.Length;
+        DateText.HighlightLength = Math.Min(4, weekday.Length);
+    }
+
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!_isLoaded || !_settings.IsResizable)
+        {
+            return;
+        }
+
+        WindowSnapService.SnapResize(this);
+        SaveSettings();
+    }
+
+    private void ApplyResizeMode()
+    {
+        MinWidth = 280;
+        MinHeight = 140;
+        ResizeMode = _settings.IsResizable ? ResizeMode.CanResizeWithGrip : ResizeMode.NoResize;
     }
 
     private void SaveSettings()
@@ -113,8 +179,11 @@ public partial class MainWindow : Window
         {
             settings.Left = Left;
             settings.Top = Top;
+            settings.Width = Width;
+            settings.Height = Height;
             settings.Topmost = Topmost;
             settings.IsLocked = LockMenuItem.IsChecked;
+            settings.IsResizable = ResizeMenuItem.IsChecked;
         });
     }
 

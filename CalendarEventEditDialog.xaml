@@ -1,0 +1,189 @@
+<Window x:Class="TimeWidget.CalendarEventEditDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Event"
+        Width="360"
+        Height="520"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <SolidColorBrush x:Key="MainBackground" Color="#1F1E33" />
+        <SolidColorBrush x:Key="SecondaryBackground" Color="#273142" />
+        <SolidColorBrush x:Key="SelectedBackground" Color="#36506C" />
+        <SolidColorBrush x:Key="PrimaryText" Color="#EAF3FF" />
+        <SolidColorBrush x:Key="SecondaryText" Color="#AAB8C8" />
+        <SolidColorBrush x:Key="AccentText" Color="#A7D8FF" />
+        <SolidColorBrush x:Key="BorderBrush" Color="#3A4658" />
+        <SolidColorBrush x:Key="DangerText" Color="#FF8A8A" />
+
+        <Style x:Key="DialogButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource SecondaryBackground}" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="14,6" />
+            <Setter Property="FontFamily" Value="MiSans" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource RoundedButtonFocusVisual}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border CornerRadius="22"
+            Background="{StaticResource MainBackground}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1"
+            Padding="18"
+            MouseLeftButtonDown="Window_MouseLeftButtonDown">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="10" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="10" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="12" />
+                <RowDefinition Height="184" />
+                <RowDefinition Height="10" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock x:Name="DateText"
+                       FontFamily="MiSans"
+                       FontSize="18"
+                       FontWeight="Bold"
+                       Foreground="{StaticResource PrimaryText}" />
+
+            <TextBox x:Name="TitleTextBox"
+                     Grid.Row="2"
+                     Height="32"
+                     Background="{StaticResource SecondaryBackground}"
+                     BorderBrush="{StaticResource BorderBrush}"
+                     Foreground="{StaticResource PrimaryText}"
+                     FontFamily="MiSans"
+                     FontWeight="Bold"
+                     Padding="9,5" />
+
+            <Grid Grid.Row="4"
+                  HorizontalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="70" />
+                    <ColumnDefinition Width="22" />
+                    <ColumnDefinition Width="70" />
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="HourTextBox"
+                         Height="44"
+                         MaxLength="2"
+                         HorizontalContentAlignment="Center"
+                         VerticalContentAlignment="Center"
+                         Background="{StaticResource SelectedBackground}"
+                         BorderBrush="{StaticResource AccentText}"
+                         Foreground="{StaticResource PrimaryText}"
+                         FontFamily="MiSans"
+                         FontSize="22"
+                         FontWeight="Bold"
+                         PreviewTextInput="NumberTextBox_PreviewTextInput"
+                         GotFocus="HourTextBox_GotFocus"
+                         TextChanged="TimeTextBox_TextChanged" />
+                <TextBlock Grid.Column="1"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           FontFamily="MiSans"
+                           FontSize="24"
+                           FontWeight="Bold"
+                           Foreground="{StaticResource SecondaryText}"
+                           Text=":" />
+                <TextBox x:Name="MinuteTextBox"
+                         Grid.Column="2"
+                         Height="44"
+                         MaxLength="2"
+                         HorizontalContentAlignment="Center"
+                         VerticalContentAlignment="Center"
+                         Background="{StaticResource SecondaryBackground}"
+                         BorderBrush="{StaticResource BorderBrush}"
+                         Foreground="{StaticResource PrimaryText}"
+                         FontFamily="MiSans"
+                         FontSize="22"
+                         FontWeight="Bold"
+                         PreviewTextInput="NumberTextBox_PreviewTextInput"
+                         GotFocus="MinuteTextBox_GotFocus"
+                         TextChanged="TimeTextBox_TextChanged" />
+            </Grid>
+
+            <Grid Grid.Row="6"
+                  Width="184"
+                  Height="184"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center">
+                <Ellipse Fill="#273142"
+                         Stroke="#3A4658"
+                         StrokeThickness="1" />
+                <Line x:Name="DialHand"
+                      X1="92"
+                      Y1="92"
+                      X2="92"
+                      Y2="34"
+                      Stroke="#80A7D8FF"
+                      StrokeThickness="2"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round" />
+                <Ellipse Width="8"
+                         Height="8"
+                         Fill="#A7D8FF"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center" />
+                <Canvas x:Name="DialCanvas"
+                        Width="184"
+                        Height="184" />
+            </Grid>
+
+            <TextBox x:Name="DescriptionTextBox"
+                     Grid.Row="8"
+                     Background="{StaticResource SecondaryBackground}"
+                     BorderBrush="{StaticResource BorderBrush}"
+                     Foreground="{StaticResource PrimaryText}"
+                     FontFamily="MiSans"
+                     Padding="8,6"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap" />
+
+            <TextBlock x:Name="ErrorText"
+                       Grid.Row="9"
+                       HorizontalAlignment="Left"
+                       VerticalAlignment="Center"
+                       FontFamily="MiSans"
+                       FontSize="12"
+                       Foreground="{StaticResource DangerText}" />
+            <StackPanel Grid.Row="9"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <Button Content="Cancel"
+                        Style="{StaticResource DialogButtonStyle}"
+                        Click="CancelButton_Click" />
+                <Button Content="Save"
+                        Margin="8,0,0,0"
+                        Style="{StaticResource DialogButtonStyle}"
+                        Click="SaveButton_Click" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>
