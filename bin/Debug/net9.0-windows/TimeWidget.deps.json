@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "TimeWidget/1.0.0": {
+        "runtime": {
+          "TimeWidget.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "TimeWidget/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

@@ -1,0 +1,249 @@
+<Window x:Class="TimeWidget.WeatherWidgetWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Weather"
+        Width="420"
+        Height="260"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Loaded="Window_Loaded"
+        Closing="Window_Closing"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+    <Window.ContextMenu>
+        <ContextMenu>
+            <MenuItem x:Name="TopmostMenuItem"
+                      Header="&#x7F6E;&#x9876;"
+                      IsCheckable="True"
+                      IsChecked="True"
+                      Click="TopmostMenuItem_Click" />
+            <MenuItem x:Name="LockMenuItem"
+                      Header="&#x9501;&#x5B9A;&#x4F4D;&#x7F6E;"
+                      IsCheckable="True"
+                      Click="LockMenuItem_Click" />
+            <Separator />
+            <MenuItem Header="&#x5237;&#x65B0;&#x663E;&#x793A;"
+                      Click="RefreshDisplayMenuItem_Click" />
+            <MenuItem Header="Choose City">
+                <MenuItem Header="Beijing"
+                          Tag="101010100"
+                          Click="ChooseCityMenuItem_Click" />
+                <MenuItem Header="Shanghai"
+                          Tag="101020100"
+                          Click="ChooseCityMenuItem_Click" />
+                <MenuItem Header="Guangzhou"
+                          Tag="101280101"
+                          Click="ChooseCityMenuItem_Click" />
+                <MenuItem Header="Shenzhen"
+                          Tag="101280601"
+                          Click="ChooseCityMenuItem_Click" />
+                <MenuItem Header="Chengdu"
+                          Tag="101270101"
+                          Click="ChooseCityMenuItem_Click" />
+            </MenuItem>
+            <MenuItem Header="&#x9000;&#x51FA;"
+                      Click="ExitMenuItem_Click" />
+        </ContextMenu>
+    </Window.ContextMenu>
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="MainBackground" Color="#1E2633" />
+        <SolidColorBrush x:Key="SecondaryBackground" Color="#273142" />
+        <SolidColorBrush x:Key="HoverBackground" Color="#303B4F" />
+        <SolidColorBrush x:Key="PrimaryText" Color="#EAF3FF" />
+        <SolidColorBrush x:Key="SecondaryText" Color="#AAB8C8" />
+        <SolidColorBrush x:Key="MutedText" Color="#7F8EA3" />
+        <SolidColorBrush x:Key="AccentText" Color="#A7D8FF" />
+        <SolidColorBrush x:Key="BorderBrush" Color="#3A4658" />
+
+        <Style x:Key="WeatherCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource SecondaryBackground}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Padding" Value="11,10" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource HoverBackground}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Border CornerRadius="22"
+            Background="{StaticResource MainBackground}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1"
+            SnapsToDevicePixels="True">
+        <Grid Margin="18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="48" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="42" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0">
+                <StackPanel VerticalAlignment="Top">
+                    <TextBlock x:Name="CityText"
+                               FontFamily="MiSans"
+                               FontSize="24"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource PrimaryText}"
+                               Text="Beijing"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="UpdatedText"
+                               Margin="1,2,0,0"
+                               FontFamily="MiSans"
+                               FontSize="12"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource MutedText}"
+                               Text="Updated 00:00" />
+                    <TextBlock x:Name="StatusText"
+                               Margin="1,1,0,0"
+                               FontFamily="MiSans"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource MutedText}"
+                               Text=""
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <StackPanel HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Orientation="Horizontal">
+                    <Button x:Name="LocationSettingsButton"
+                            Margin="0,0,10,0"
+                            Padding="8,3"
+                            Background="{StaticResource SecondaryBackground}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            Foreground="{StaticResource AccentText}"
+                            FontFamily="MiSans"
+                            FontSize="11"
+                            FontWeight="Bold"
+                            Content="Location"
+                            Visibility="Collapsed"
+                            Click="LocationSettingsButton_Click" />
+                    <TextBlock Margin="0,4,0,0"
+                               FontFamily="MiSans"
+                               FontSize="13"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource AccentText}"
+                               Text="Weather" />
+                </StackPanel>
+            </Grid>
+
+            <ItemsControl x:Name="DaysItemsControl"
+                          Grid.Row="1"
+                          Margin="0,8,0,12">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Columns="3" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource WeatherCardStyle}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="34" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0"
+                                           FontFamily="MiSans"
+                                           FontSize="12"
+                                           FontWeight="Bold"
+                                           Foreground="{StaticResource MutedText}"
+                                           Text="{Binding DateLabel}"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Row="1"
+                                           Margin="0,2,0,0"
+                                           FontSize="26"
+                                           Text="{Binding WeatherIcon}" />
+                                <TextBlock Grid.Row="2"
+                                           FontFamily="MiSans"
+                                           FontSize="13"
+                                           FontWeight="Bold"
+                                           Foreground="{StaticResource PrimaryText}"
+                                           Text="{Binding WeatherText}"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Row="3"
+                                           Margin="0,7,0,0"
+                                           FontFamily="MiSans"
+                                           FontSize="16"
+                                           FontWeight="Bold"
+                                           Foreground="{StaticResource AccentText}">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}{0}&#xB0; / {1}&#xB0;">
+                                            <Binding Path="HighTemp" />
+                                            <Binding Path="LowTemp" />
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                                <TextBlock Grid.Row="4"
+                                           Margin="0,4,0,0"
+                                           FontFamily="MiSans"
+                                           FontSize="11"
+                                           FontWeight="Bold"
+                                           Foreground="{StaticResource SecondaryText}">
+                                    <TextBlock.Text>
+                                        <Binding Path="Humidity" StringFormat="Humidity {0}%" />
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Border x:Name="AlertBar"
+                    Grid.Row="2"
+                    Height="38"
+                    CornerRadius="13"
+                    BorderThickness="1"
+                    Padding="12,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="128" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock x:Name="AlertTitleText"
+                               Grid.Column="0"
+                               VerticalAlignment="Center"
+                               FontFamily="MiSans"
+                               FontSize="12"
+                               FontWeight="Bold"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="AlertDescriptionText"
+                               Grid.Column="1"
+                               VerticalAlignment="Center"
+                               Margin="8,0,12,0"
+                               FontFamily="MiSans"
+                               FontSize="12"
+                               FontWeight="Bold"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="2"
+                               VerticalAlignment="Center"
+                               FontFamily="MiSans"
+                               FontSize="12"
+                               FontWeight="Bold">
+                        <Hyperlink x:Name="ChinaWeatherLink"
+                                   RequestNavigate="ChinaWeatherLink_RequestNavigate">
+                            China Weather
+                        </Hyperlink>
+                    </TextBlock>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>
