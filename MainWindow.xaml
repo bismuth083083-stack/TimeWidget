@@ -37,14 +37,20 @@
                       Click="OpenMediaMenuItem_Click" />
             <MenuItem Header="Weather"
                       Click="OpenWeatherMenuItem_Click" />
-            <MenuItem Header="Open Alarm Widget"
-                      Click="OpenAlarmMenuItem_Click" />
-            <MenuItem Header="Open Timer Widget"
-                      Click="OpenTimerMenuItem_Click" />
+            <MenuItem Header="Open Alarm Timer Widget"
+                      Click="OpenAlarmTimerMenuItem_Click" />
             <MenuItem Header="AI Search"
                       Click="OpenAiSearchMenuItem_Click" />
             <MenuItem Header="Open Calendar Widget"
                       Click="OpenCalendarMenuItem_Click" />
+            <MenuItem Header="Open Schedule Widget"
+                      Click="OpenScheduleMenuItem_Click" />
+            <MenuItem Header="Open VPN Shortcuts"
+                      Click="OpenVpnMenuItem_Click" />
+            <MenuItem Header="Open Quick Settings"
+                      Click="OpenQuickSettingsMenuItem_Click" />
+            <MenuItem Header="Open Performance Widget"
+                      Click="OpenPerformanceMenuItem_Click" />
             <Separator />
             <MenuItem Header="&#x9000;&#x51FA;"
                       Click="ExitMenuItem_Click" />

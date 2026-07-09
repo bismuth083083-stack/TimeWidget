@@ -117,16 +117,10 @@ public partial class MainWindow : Window
         weatherWidgetWindow.Show();
     }
 
-    private void OpenAlarmMenuItem_Click(object sender, RoutedEventArgs e)
+    private void OpenAlarmTimerMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        AlarmWidgetWindow alarmWidgetWindow = new();
-        alarmWidgetWindow.Show();
-    }
-
-    private void OpenTimerMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        TimerWidgetWindow timerWidgetWindow = new();
-        timerWidgetWindow.Show();
+        AlarmTimerWidgetWindow alarmTimerWidgetWindow = new();
+        alarmTimerWidgetWindow.Show();
     }
 
     private void OpenAiSearchMenuItem_Click(object sender, RoutedEventArgs e)
@@ -139,6 +133,30 @@ public partial class MainWindow : Window
     {
         CalendarWidgetWindow calendarWidgetWindow = new();
         calendarWidgetWindow.Show();
+    }
+
+    private void OpenScheduleMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ScheduleWidgetWindow scheduleWidgetWindow = new();
+        scheduleWidgetWindow.Show();
+    }
+
+    private void OpenVpnMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        VpnWidgetWindow vpnWidgetWindow = new();
+        vpnWidgetWindow.Show();
+    }
+
+    private void OpenQuickSettingsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        SettingsWidgetWindow settingsWidgetWindow = new();
+        settingsWidgetWindow.Show();
+    }
+
+    private void OpenPerformanceMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        PerformanceWidgetWindow performanceWidgetWindow = new();
+        performanceWidgetWindow.Show();
     }
 
     private void UpdateClock()

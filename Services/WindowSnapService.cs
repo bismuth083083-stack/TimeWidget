@@ -203,9 +203,14 @@ public static class WindowSnapService
             or MediaWidgetWindow
             or WeatherWidgetWindow
             or AlarmWidgetWindow
+            or AlarmTimerWidgetWindow
             or TimerWidgetWindow
             or AiSearchWidgetWindow
-            or CalendarWidgetWindow;
+            or CalendarWidgetWindow
+            or ScheduleWidgetWindow
+            or VpnWidgetWindow
+            or SettingsWidgetWindow
+            or PerformanceWidgetWindow;
     }
 
     private static bool RangesTouchOrOverlap(double firstStart, double firstEnd, double secondStart, double secondEnd)

@@ -147,6 +147,11 @@ public partial class FolderWidgetWindow : Window
         ScanCurrentFolder();
     }
 
+    private void ExitButton_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+    }
+
     private void FilesListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (GetSelectedFile() is FolderFileItem file)

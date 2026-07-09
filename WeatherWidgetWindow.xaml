@@ -179,7 +179,9 @@
                                            TextTrimming="CharacterEllipsis" />
                                 <TextBlock Grid.Row="1"
                                            Margin="0,2,0,0"
+                                           FontFamily="Segoe UI Emoji, Segoe UI Symbol"
                                            FontSize="26"
+                                           Foreground="{StaticResource PrimaryText}"
                                            Text="{Binding WeatherIcon}" />
                                 <TextBlock Grid.Row="2"
                                            FontFamily="MiSans"

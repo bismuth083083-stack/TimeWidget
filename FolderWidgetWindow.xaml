@@ -38,6 +38,7 @@
         <SolidColorBrush x:Key="PanelBorder" Color="#33FFFFFF" />
         <SolidColorBrush x:Key="PrimaryText" Color="#F0EAF3FF" />
         <SolidColorBrush x:Key="SecondaryText" Color="#A8D8E6F2" />
+        <SolidColorBrush x:Key="AccentText" Color="#A7D8FF" />
         <SolidColorBrush x:Key="ItemBackground" Color="#0FFFFFFF" />
         <SolidColorBrush x:Key="ItemHover" Color="#1AFFFFFF" />
 
@@ -174,6 +175,10 @@
                             Margin="8,0,0,0"
                             Style="{StaticResource ToolButtonStyle}"
                             Click="RefreshButton_Click" />
+                    <Button Content="Exit"
+                            Margin="8,0,0,0"
+                            Style="{StaticResource ToolButtonStyle}"
+                            Click="ExitButton_Click" />
                 </StackPanel>
             </Grid>
 
@@ -212,6 +217,7 @@
                         <DataTemplate>
                             <Grid>
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="28" />
                                     <ColumnDefinition Width="*" MinWidth="0" />
                                     <ColumnDefinition Width="68" />
                                 </Grid.ColumnDefinitions>
@@ -220,7 +226,15 @@
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
-                                <TextBlock Grid.Column="0"
+                                <TextBlock Grid.RowSpan="2"
+                                           Grid.Column="0"
+                                           Margin="0,1,8,0"
+                                           VerticalAlignment="Center"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17"
+                                           Foreground="{StaticResource AccentText}"
+                                           Text="{Binding IconGlyph}" />
+                                <TextBlock Grid.Column="1"
                                            FontFamily="MiSans"
                                            FontSize="14"
                                            FontWeight="Bold"
@@ -228,7 +242,7 @@
                                            Text="{Binding FileName}"
                                            TextTrimming="CharacterEllipsis"
                                            ToolTip="{Binding FullPath}" />
-                                <TextBlock Grid.Column="1"
+                                <TextBlock Grid.Column="2"
                                            HorizontalAlignment="Right"
                                            FontFamily="MiSans"
                                            FontSize="12"
@@ -237,7 +251,7 @@
                                            Text="{Binding FileType}"
                                            TextTrimming="CharacterEllipsis" />
                                 <TextBlock Grid.Row="1"
-                                           Grid.Column="0"
+                                           Grid.Column="1"
                                            Margin="0,3,0,0"
                                            FontFamily="MiSans"
                                            FontSize="12"
@@ -245,7 +259,7 @@
                                            Foreground="{StaticResource SecondaryText}"
                                            Text="{Binding ModifiedText}" />
                                 <TextBlock Grid.Row="1"
-                                           Grid.Column="1"
+                                           Grid.Column="2"
                                            Margin="0,3,0,0"
                                            HorizontalAlignment="Right"
                                            FontFamily="MiSans"

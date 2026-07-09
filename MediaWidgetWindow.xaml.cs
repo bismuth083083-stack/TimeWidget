@@ -26,6 +26,8 @@ public partial class MediaWidgetWindow : Window
     private WidgetSettings _settings = new();
     private bool _isClosed;
     private bool _isLoaded;
+    private DateTime _lastSpectrumSampleTime = DateTime.MinValue;
+    private DateTime _lastSpectrumRestartTime = DateTime.MinValue;
 
     public MediaWidgetWindow()
     {
@@ -56,6 +58,7 @@ public partial class MediaWidgetWindow : Window
         };
 
         _audioSpectrumService.CaptureUnavailable += AudioSpectrumService_CaptureUnavailable;
+        _audioSpectrumService.CaptureAvailable += AudioSpectrumService_CaptureAvailable;
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -92,6 +95,7 @@ public partial class MediaWidgetWindow : Window
         UnsubscribeSessionManager();
         UnsubscribeCurrentSession();
         _audioSpectrumService.CaptureUnavailable -= AudioSpectrumService_CaptureUnavailable;
+        _audioSpectrumService.CaptureAvailable -= AudioSpectrumService_CaptureAvailable;
         _audioSpectrumService.Dispose();
     }
 
@@ -376,7 +380,17 @@ public partial class MediaWidgetWindow : Window
 
         try
         {
-            double[] spectrum = _audioSpectrumService.TryGetLatestSamples(FftSpectrumAnalyzer.FftSize, _fftSamples)
+            bool hasSamples = _audioSpectrumService.TryGetLatestSamples(FftSpectrumAnalyzer.FftSize, _fftSamples);
+            if (hasSamples)
+            {
+                _lastSpectrumSampleTime = DateTime.UtcNow;
+            }
+            else
+            {
+                RestartSpectrumCaptureIfStale();
+            }
+
+            double[] spectrum = hasSamples
                 ? _spectrumAnalyzer.Analyze(_fftSamples, _audioSpectrumService.SampleRate)
                 : Array.Empty<double>();
             _spectrumSmoother.SetTarget(spectrum);
@@ -471,6 +485,42 @@ public partial class MediaWidgetWindow : Window
             settings.MediaIsLocked = LockMenuItem.IsChecked;
             settings.MediaIsResizable = ResizeMenuItem.IsChecked;
         });
+    }
+
+    private void AudioSpectrumService_CaptureAvailable(object? sender, EventArgs e)
+    {
+        if (_isClosed || Dispatcher.HasShutdownStarted)
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!_isClosed)
+            {
+                AudioStatusText.Text = string.Empty;
+                AudioStatusText.Visibility = Visibility.Collapsed;
+            }
+        });
+    }
+
+    private void RestartSpectrumCaptureIfStale()
+    {
+        DateTime now = DateTime.UtcNow;
+        if (_lastSpectrumSampleTime == DateTime.MinValue)
+        {
+            _lastSpectrumSampleTime = now;
+            return;
+        }
+
+        if ((now - _lastSpectrumSampleTime).TotalSeconds < 5
+            || (now - _lastSpectrumRestartTime).TotalSeconds < 8)
+        {
+            return;
+        }
+
+        _lastSpectrumRestartTime = now;
+        _audioSpectrumService.Restart();
     }
 
     private void KeepWindowOnScreen()

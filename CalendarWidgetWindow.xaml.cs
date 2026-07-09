@@ -17,6 +17,7 @@ public partial class CalendarWidgetWindow : Window
     private WidgetSettings _settings = new();
     private DateTime _displayMonth;
     private DateTime _selectedDate;
+    private bool _isLoaded;
 
     public CalendarWidgetWindow()
     {
@@ -29,6 +30,14 @@ public partial class CalendarWidgetWindow : Window
         Topmost = _settings.CalendarTopmost;
         TopmostMenuItem.IsChecked = _settings.CalendarTopmost;
         LockMenuItem.IsChecked = _settings.CalendarIsLocked;
+        ResizeMenuItem.IsChecked = _settings.CalendarIsResizable;
+        ApplyResizeMode();
+        if (_settings.CalendarWidth.HasValue && _settings.CalendarHeight.HasValue)
+        {
+            Width = _settings.CalendarWidth.Value;
+            Height = _settings.CalendarHeight.Value;
+        }
+
         RestorePosition();
 
         _events.Clear();
@@ -38,6 +47,7 @@ public partial class CalendarWidgetWindow : Window
         _selectedDate = IsInRange(today) ? today : new DateTime(2026, 1, 1);
         _displayMonth = new DateTime(_selectedDate.Year, _selectedDate.Month, 1);
         RefreshCalendar();
+        _isLoaded = true;
     }
 
     private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -70,6 +80,24 @@ public partial class CalendarWidgetWindow : Window
     private void LockMenuItem_Click(object sender, RoutedEventArgs e)
     {
         _settings.CalendarIsLocked = LockMenuItem.IsChecked;
+        SaveSettings();
+    }
+
+    private void ResizeMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.CalendarIsResizable = ResizeMenuItem.IsChecked;
+        ApplyResizeMode();
+        SaveSettings();
+    }
+
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!_isLoaded || !_settings.CalendarIsResizable)
+        {
+            return;
+        }
+
+        WindowSnapService.SnapResize(this);
         SaveSettings();
     }
 
@@ -326,9 +354,19 @@ public partial class CalendarWidgetWindow : Window
         {
             settings.CalendarLeft = Left;
             settings.CalendarTop = Top;
+            settings.CalendarWidth = Width;
+            settings.CalendarHeight = Height;
             settings.CalendarTopmost = Topmost;
             settings.CalendarIsLocked = LockMenuItem.IsChecked;
+            settings.CalendarIsResizable = ResizeMenuItem.IsChecked;
         });
+    }
+
+    private void ApplyResizeMode()
+    {
+        MinWidth = 360;
+        MinHeight = 480;
+        ResizeMode = _settings.CalendarIsResizable ? ResizeMode.CanResizeWithGrip : ResizeMode.NoResize;
     }
 
     private static bool IsInRange(DateTime date)

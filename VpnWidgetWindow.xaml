@@ -1,0 +1,193 @@
+<Window x:Class="TimeWidget.VpnWidgetWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:TimeWidget.Controls"
+        Title="VPN"
+        Width="360"
+        Height="220"
+        MinWidth="320"
+        MinHeight="200"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Loaded="Window_Loaded"
+        Closing="Window_Closing"
+        SizeChanged="Window_SizeChanged"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+    <Window.ContextMenu>
+        <ContextMenu>
+            <MenuItem x:Name="TopmostMenuItem"
+                      Header="置顶"
+                      IsCheckable="True"
+                      IsChecked="True"
+                      Click="TopmostMenuItem_Click" />
+            <MenuItem x:Name="LockMenuItem"
+                      Header="锁定位置"
+                      IsCheckable="True"
+                      Click="LockMenuItem_Click" />
+            <MenuItem x:Name="ResizeMenuItem"
+                      Header="允许调整大小"
+                      IsCheckable="True"
+                      Click="ResizeMenuItem_Click" />
+            <Separator />
+            <MenuItem Header="刷新状态"
+                      Click="RefreshMenuItem_Click" />
+            <MenuItem Header="重新选择 Sharkcloud"
+                      Click="ChooseSharkcloudMenuItem_Click" />
+            <MenuItem Header="重新选择 FLClash"
+                      Click="ChooseFlClashMenuItem_Click" />
+            <Separator />
+            <MenuItem Header="退出"
+                      Click="ExitMenuItem_Click" />
+        </ContextMenu>
+    </Window.ContextMenu>
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="MainBackground" Color="#1F1E33" />
+        <SolidColorBrush x:Key="SecondaryBackground" Color="#273142" />
+        <SolidColorBrush x:Key="HoverBackground" Color="#303B4F" />
+        <SolidColorBrush x:Key="PrimaryText" Color="#EAF3FF" />
+        <SolidColorBrush x:Key="SecondaryText" Color="#AAB8C8" />
+        <SolidColorBrush x:Key="MutedText" Color="#7F8EA3" />
+        <SolidColorBrush x:Key="AccentText" Color="#A7D8FF" />
+        <SolidColorBrush x:Key="BorderBrush" Color="#3A4658" />
+
+        <Style x:Key="VpnButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource SecondaryBackground}" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="FontFamily" Value="MiSans" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource RoundedButtonFocusVisual}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="12">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource HoverBackground}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#36506C" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border Margin="8"
+            CornerRadius="22"
+            Background="{StaticResource MainBackground}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1"
+            Padding="16"
+            SnapsToDevicePixels="True">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="14"
+                              ShadowDepth="2"
+                              Direction="270"
+                              Opacity="0.18"
+                              Color="#000000" />
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="12" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="10" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0">
+                <controls:HighlightedTextBlock Height="29"
+                                               FontFamily="MiSans"
+                                               FontSize="22"
+                                               FontWeight="Bold"
+                                               Foreground="{StaticResource PrimaryText}"
+                                               HighlightBrush="#FFFF0000"
+                                               HighlightStart="0"
+                                               HighlightLength="1"
+                                               Text="VPN Shortcuts" />
+                <TextBlock x:Name="StatusDotText"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Center"
+                           FontFamily="MiSans"
+                           FontSize="12"
+                           FontWeight="Bold"
+                           Foreground="{StaticResource AccentText}"
+                           Text="Proxy off" />
+            </Grid>
+
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0"
+                        Content="Sharkcloud"
+                        Style="{StaticResource VpnButtonStyle}"
+                        Click="OpenSharkcloudButton_Click" />
+                <Button Grid.Column="2"
+                        Content="FLClash"
+                        Style="{StaticResource VpnButtonStyle}"
+                        Click="OpenFlClashButton_Click" />
+            </Grid>
+
+            <Grid Grid.Row="4">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="8" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Button Grid.Row="0"
+                        Content="Open System Proxy Settings"
+                        Style="{StaticResource VpnButtonStyle}"
+                        Click="OpenProxySettingsButton_Click" />
+
+                <Border Grid.Row="2"
+                        CornerRadius="14"
+                        Background="{StaticResource SecondaryBackground}"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1"
+                        Padding="10,7">
+                    <StackPanel>
+                        <TextBlock x:Name="HttpProxyText"
+                                   FontFamily="MiSans"
+                                   FontSize="12"
+                                   FontWeight="Bold"
+                                   Foreground="{StaticResource SecondaryText}"
+                                   Text="HTTP: Not set"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="SocksProxyText"
+                                   Margin="0,4,0,0"
+                                   FontFamily="MiSans"
+                                   FontSize="12"
+                                   FontWeight="Bold"
+                                   Foreground="{StaticResource SecondaryText}"
+                                   Text="SOCKS: Not set"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

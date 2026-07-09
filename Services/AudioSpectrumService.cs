@@ -12,10 +12,13 @@ public sealed class AudioSpectrumService : IDisposable
     private int _sampleCount;
     private WasapiLoopbackCapture? _capture;
     private bool _isDisposed;
+    private bool _isRestarting;
+    private bool _isStoppingCapture;
 
     public int SampleRate { get; private set; } = 44100;
 
     public event EventHandler<string>? CaptureUnavailable;
+    public event EventHandler? CaptureAvailable;
 
     public void Start()
     {
@@ -39,6 +42,18 @@ public sealed class AudioSpectrumService : IDisposable
             ClearBuffer();
             CaptureUnavailable?.Invoke(this, "No audio output device available.");
         }
+    }
+
+    public void Restart()
+    {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        DisposeCapture();
+        ClearBuffer();
+        Start();
     }
 
     public bool TryGetLatestSamples(int count, float[] destination)
@@ -75,6 +90,7 @@ public sealed class AudioSpectrumService : IDisposable
         try
         {
             AddSamples(e.Buffer, e.BytesRecorded, _capture.WaveFormat);
+            CaptureAvailable?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {
@@ -112,9 +128,10 @@ public sealed class AudioSpectrumService : IDisposable
 
     private static float ReadSample(byte[] buffer, int offset, WaveFormat format)
     {
-        if (format.Encoding == WaveFormatEncoding.IeeeFloat && format.BitsPerSample == 32)
+        if (format.BitsPerSample == 32 && IsFloatFormat(format))
         {
-            return BitConverter.ToSingle(buffer, offset);
+            float sample = BitConverter.ToSingle(buffer, offset);
+            return float.IsFinite(sample) ? Math.Clamp(sample, -1f, 1f) : 0;
         }
 
         return format.BitsPerSample switch
@@ -124,6 +141,23 @@ public sealed class AudioSpectrumService : IDisposable
             32 => BitConverter.ToInt32(buffer, offset) / 2147483648f,
             _ => 0
         };
+    }
+
+    private static bool IsFloatFormat(WaveFormat format)
+    {
+        if (format.Encoding == WaveFormatEncoding.IeeeFloat)
+        {
+            return true;
+        }
+
+        if (format.Encoding != WaveFormatEncoding.Extensible)
+        {
+            return false;
+        }
+
+        string formatText = format.ToString();
+        return formatText.Contains("IEEE", StringComparison.OrdinalIgnoreCase)
+            || formatText.Contains("Float", StringComparison.OrdinalIgnoreCase);
     }
 
     private static int Read24BitSample(byte[] buffer, int offset)
@@ -139,11 +173,54 @@ public sealed class AudioSpectrumService : IDisposable
 
     private void Capture_RecordingStopped(object? sender, StoppedEventArgs e)
     {
-        if (!_isDisposed && e.Exception is not null)
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        if (_isStoppingCapture)
+        {
+            return;
+        }
+
+        if (e.Exception is not null)
         {
             Debug.WriteLine($"Audio capture stopped: {e.Exception}");
             CaptureUnavailable?.Invoke(this, "Audio capture stopped.");
         }
+
+        RestartCaptureSoon();
+    }
+
+    private void RestartCaptureSoon()
+    {
+        if (_isDisposed || _isRestarting)
+        {
+            return;
+        }
+
+        _isRestarting = true;
+        Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(800);
+                if (_isDisposed)
+                {
+                    return;
+                }
+
+                DisposeCapture();
+                ClearBuffer();
+                _isRestarting = false;
+                Start();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Audio capture restart failed: {ex}");
+                _isRestarting = false;
+            }
+        });
     }
 
     private void ClearBuffer()
@@ -179,6 +256,7 @@ public sealed class AudioSpectrumService : IDisposable
         {
             _capture.DataAvailable -= Capture_DataAvailable;
             _capture.RecordingStopped -= Capture_RecordingStopped;
+            _isStoppingCapture = true;
             _capture.StopRecording();
         }
         catch (Exception ex)
@@ -187,6 +265,7 @@ public sealed class AudioSpectrumService : IDisposable
         }
         finally
         {
+            _isStoppingCapture = false;
             _capture.Dispose();
             _capture = null;
         }
