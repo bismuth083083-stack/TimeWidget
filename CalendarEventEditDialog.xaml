@@ -11,7 +11,7 @@
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">
     <Window.Resources>
-        <SolidColorBrush x:Key="MainBackground" Color="#1F1E33" />
+        <SolidColorBrush x:Key="MainBackground" Color="#F21F1E33" />
         <SolidColorBrush x:Key="SecondaryBackground" Color="#273142" />
         <SolidColorBrush x:Key="SelectedBackground" Color="#36506C" />
         <SolidColorBrush x:Key="PrimaryText" Color="#EAF3FF" />

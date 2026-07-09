@@ -59,7 +59,7 @@
 
     <Border Margin="8"
             CornerRadius="24"
-            Background="#FF1F1E33"
+            Background="#F21F1E33"
             BorderBrush="#33FFFFFF"
             BorderThickness="1"
             SnapsToDevicePixels="True">

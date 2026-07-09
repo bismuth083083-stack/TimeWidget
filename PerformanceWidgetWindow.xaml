@@ -32,7 +32,7 @@
     </Window.ContextMenu>
 
     <Window.Resources>
-        <SolidColorBrush x:Key="MainBackground" Color="#1F1E33" />
+        <SolidColorBrush x:Key="MainBackground" Color="#F21F1E33" />
         <SolidColorBrush x:Key="SecondaryBackground" Color="#273142" />
         <SolidColorBrush x:Key="PrimaryText" Color="#EAF3FF" />
         <SolidColorBrush x:Key="SecondaryText" Color="#AAB8C8" />

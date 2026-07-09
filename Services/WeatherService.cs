@@ -190,15 +190,15 @@ public sealed class WeatherService
     {
         return code switch
         {
-            0 => new WeatherCodeInfo("Sunny", "\u2600"),
+            0 => new WeatherCodeInfo("Sunny", "\u2600\uFE0F"),
             1 or 2 => new WeatherCodeInfo("Partly Cloudy", "\u26C5"),
-            3 => new WeatherCodeInfo("Cloudy", "\u2601"),
-            45 or 48 => new WeatherCodeInfo("Fog", "\U0001F32B"),
-            51 or 53 or 55 or 56 or 57 => new WeatherCodeInfo("Drizzle", "\U0001F327"),
-            61 or 63 or 65 or 66 or 67 or 80 or 81 or 82 => new WeatherCodeInfo("Rain", "\U0001F327"),
-            71 or 73 or 75 or 77 or 85 or 86 => new WeatherCodeInfo("Snow", "\u2744"),
-            95 or 96 or 99 => new WeatherCodeInfo("Thunderstorm", "\u26C8"),
-            _ => new WeatherCodeInfo("Cloudy", "\u2601")
+            3 => new WeatherCodeInfo("Cloudy", "\u2601\uFE0F"),
+            45 or 48 => new WeatherCodeInfo("Fog", "\U0001F32B\uFE0F"),
+            51 or 53 or 55 or 56 or 57 => new WeatherCodeInfo("Drizzle", "\U0001F327\uFE0F"),
+            61 or 63 or 65 or 66 or 67 or 80 or 81 or 82 => new WeatherCodeInfo("Rain", "\U0001F327\uFE0F"),
+            71 or 73 or 75 or 77 or 85 or 86 => new WeatherCodeInfo("Snow", "\u2744\uFE0F"),
+            95 or 96 or 99 => new WeatherCodeInfo("Thunderstorm", "\u26C8\uFE0F"),
+            _ => new WeatherCodeInfo("Cloudy", "\u2601\uFE0F")
         };
     }
 
@@ -340,23 +340,23 @@ public sealed class WeatherService
     {
         if (weatherText.Contains("\u96ea", StringComparison.Ordinal))
         {
-            return "\u2744";
+            return "\u2744\uFE0F";
         }
 
         if (weatherText.Contains("\u96e8", StringComparison.Ordinal))
         {
-            return "\U0001F327";
+            return "\U0001F327\uFE0F";
         }
 
         if (weatherText.Contains("\u96f7", StringComparison.Ordinal))
         {
-            return "\u26C8";
+            return "\u26C8\uFE0F";
         }
 
         if (weatherText.Contains("\u9634", StringComparison.Ordinal)
             || weatherText.Contains("Cloud", StringComparison.OrdinalIgnoreCase))
         {
-            return "\u2601";
+            return "\u2601\uFE0F";
         }
 
         if (weatherText.Contains("\u4e91", StringComparison.Ordinal))
@@ -364,7 +364,7 @@ public sealed class WeatherService
             return "\u26C5";
         }
 
-        return "\u2600";
+        return "\u2600\uFE0F";
     }
 
     private readonly record struct WeatherCodeInfo(string Text, string Icon);

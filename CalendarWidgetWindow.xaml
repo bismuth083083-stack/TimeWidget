@@ -41,7 +41,7 @@
     </Window.ContextMenu>
 
     <Window.Resources>
-        <SolidColorBrush x:Key="MainBackground" Color="#1F1E33" />
+        <SolidColorBrush x:Key="MainBackground" Color="#F21F1E33" />
         <SolidColorBrush x:Key="SecondaryBackground" Color="#273142" />
         <SolidColorBrush x:Key="HoverBackground" Color="#303B4F" />
         <SolidColorBrush x:Key="SelectedBackground" Color="#36506C" />
@@ -70,6 +70,13 @@
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="11">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="8"
+                                                  ShadowDepth="1"
+                                                  Direction="270"
+                                                  Opacity="0.18"
+                                                  Color="#000000" />
+                            </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"
                                               Margin="{TemplateBinding Padding}" />
@@ -105,6 +112,13 @@
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="9">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="8"
+                                                  ShadowDepth="1"
+                                                  Direction="270"
+                                                  Opacity="0.18"
+                                                  Color="#000000" />
+                            </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center" />
                         </Border>
@@ -146,6 +160,13 @@
             BorderBrush="{StaticResource BorderBrush}"
             BorderThickness="1"
             Padding="16">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="14"
+                              ShadowDepth="2"
+                              Direction="270"
+                              Opacity="0.18"
+                              Color="#000000" />
+        </Border.Effect>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="40" />
@@ -293,4 +314,5 @@
         </Grid>
     </Border>
 </Window>
+
 

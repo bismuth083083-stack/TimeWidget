@@ -11,7 +11,7 @@
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">
     <Border CornerRadius="18"
-            Background="#1F1E33"
+            Background="#F21F1E33"
             BorderBrush="#3A4658"
             BorderThickness="1"
             Padding="18"

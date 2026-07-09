@@ -12,9 +12,9 @@ TRACE;DEBUG;NET;NET9_0;NETCOREAPP;WINDOWS;WINDOWS10_0_19041_0;NET5_0_OR_GREATER;
 C:\Users\35515\Documents\Codex\2026-07-08\w\TimeWidget\App.xaml
 181601054301
 
-68637027138
+691416260171
 219318092210
 AiSearchWidgetWindow.xaml;AlarmEditDialog.xaml;AlarmRingingWindow.xaml;AlarmTimerWidgetWindow.xaml;AlarmWidgetWindow.xaml;ApiKeyDialog.xaml;CalendarEventEditDialog.xaml;CalendarWidgetWindow.xaml;CourseEditDialog.xaml;FolderWidgetWindow.xaml;MainWindow.xaml;MediaWidgetWindow.xaml;PerformanceWidgetWindow.xaml;ScheduleWidgetWindow.xaml;SettingsWidgetWindow.xaml;TimerWidgetWindow.xaml;VpnWidgetWindow.xaml;WeatherWidgetWindow.xaml;
 
-False
+True
 

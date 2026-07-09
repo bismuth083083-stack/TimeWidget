@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
@@ -224,6 +225,19 @@ public partial class MediaWidgetWindow : Window
         });
     }
 
+    private async void CurrentSession_TimelinePropertiesChanged(
+        GlobalSystemMediaTransportControlsSession sender,
+        TimelinePropertiesChangedEventArgs args)
+    {
+        await Dispatcher.InvokeAsync(() =>
+        {
+            if (!_isClosed)
+            {
+                _ = RefreshMediaInfoAsync();
+            }
+        });
+    }
+
     private void UpdateCurrentSession(GlobalSystemMediaTransportControlsSession? session)
     {
         if (ReferenceEquals(_currentSession, session))
@@ -238,6 +252,7 @@ public partial class MediaWidgetWindow : Window
         {
             _currentSession.MediaPropertiesChanged += CurrentSession_MediaPropertiesChanged;
             _currentSession.PlaybackInfoChanged += CurrentSession_PlaybackInfoChanged;
+            _currentSession.TimelinePropertiesChanged += CurrentSession_TimelinePropertiesChanged;
         }
     }
 
@@ -265,6 +280,8 @@ public partial class MediaWidgetWindow : Window
                 await _currentSession.TryGetMediaPropertiesAsync();
             GlobalSystemMediaTransportControlsSessionPlaybackInfo playbackInfo =
                 _currentSession.GetPlaybackInfo();
+            GlobalSystemMediaTransportControlsSessionTimelineProperties timelineProperties =
+                _currentSession.GetTimelineProperties();
 
             TitleText.Text = string.IsNullOrWhiteSpace(properties.Title) ? "Unknown title" : properties.Title;
             ArtistText.Text = string.IsNullOrWhiteSpace(properties.Artist) ? "Unknown artist" : properties.Artist;
@@ -275,6 +292,7 @@ public partial class MediaWidgetWindow : Window
             PlayPauseButton.Content = playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing
                 ? "\uE769"
                 : "\uE768";
+            UpdateTimeline(timelineProperties);
 
             await UpdateThumbnailAsync(properties.Thumbnail);
         }
@@ -318,7 +336,9 @@ public partial class MediaWidgetWindow : Window
             TitleText.TextBrush = Brushes.White;
             ArtistText.TextBrush = new SolidColorBrush(Color.FromArgb(0xE6, 0xF0, 0xF6, 0xFF));
             PlaybackStatusText.Foreground = new SolidColorBrush(Color.FromArgb(0xCC, 0xF0, 0xF6, 0xFF));
-            SpectrumControl.BarBrush = new SolidColorBrush(Color.FromArgb(0xE8, 0xFF, 0xFF, 0xFF));
+            SolidColorBrush albumAccent = new(FindAlbumAccentColor(image));
+            albumAccent.Freeze();
+            ApplyAlbumAccent(albumAccent);
             AlbumArtPlaceholder.Visibility = Visibility.Collapsed;
         }
         catch
@@ -336,8 +356,162 @@ public partial class MediaWidgetWindow : Window
         TitleText.TextBrush = (Brush)FindResource("PrimaryText");
         ArtistText.TextBrush = (Brush)FindResource("SecondaryText");
         PlaybackStatusText.Foreground = (Brush)FindResource("SecondaryText");
-        SpectrumControl.BarBrush = new SolidColorBrush(Color.FromArgb(0xD8, 0xA7, 0xD8, 0xFF));
+        ApplyAlbumAccent((Brush)FindResource("AlbumAccent"));
         AlbumArtPlaceholder.Visibility = Visibility.Visible;
+    }
+
+    private void ApplyAlbumAccent(Brush brush)
+    {
+        SpectrumControl.BarBrush = brush;
+        MediaProgressBar.Foreground = brush;
+    }
+
+    private static Color FindAlbumAccentColor(BitmapSource source)
+    {
+        const byte alpha = 0xFF;
+        Color baseColor = Color.FromRgb(0x1F, 0x1E, 0x33);
+        Color fallback = Color.FromRgb(0xA7, 0xD8, 0xFF);
+
+        try
+        {
+            BitmapSource bitmap = source.Format == PixelFormats.Bgra32
+                ? source
+                : new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+
+            int width = bitmap.PixelWidth;
+            int height = bitmap.PixelHeight;
+            int stride = width * 4;
+            byte[] pixels = new byte[stride * height];
+            bitmap.CopyPixels(pixels, stride, 0);
+
+            Dictionary<int, ColorBucket> buckets = [];
+            int step = Math.Max(1, Math.Min(width, height) / 96);
+
+            for (int y = 0; y < height; y += step)
+            {
+                int row = y * stride;
+                for (int x = 0; x < width; x += step)
+                {
+                    int index = row + x * 4;
+                    byte b = pixels[index];
+                    byte g = pixels[index + 1];
+                    byte r = pixels[index + 2];
+                    byte a = pixels[index + 3];
+
+                    if (a < 160)
+                    {
+                        continue;
+                    }
+
+                    Color color = Color.FromRgb(r, g, b);
+                    double distance = ColorDistance(color, baseColor);
+                    double luminance = GetLuminance(color);
+                    double saturation = GetSaturation(color);
+                    if (distance < 70 || luminance < 32 || saturation < 0.12)
+                    {
+                        continue;
+                    }
+
+                    int key = ((r & 0xF0) << 8) | ((g & 0xF0) << 4) | (b & 0xF0);
+                    if (!buckets.TryGetValue(key, out ColorBucket? bucket))
+                    {
+                        bucket = new ColorBucket();
+                        buckets[key] = bucket;
+                    }
+
+                    bucket.Count++;
+                    bucket.R += r;
+                    bucket.G += g;
+                    bucket.B += b;
+                    bucket.Distance += distance;
+                    bucket.Saturation += saturation;
+                }
+            }
+
+            if (buckets.Count == 0)
+            {
+                return Color.FromArgb(alpha, fallback.R, fallback.G, fallback.B);
+            }
+
+            ColorBucket best = buckets.Values
+                .OrderByDescending(bucket => bucket.Score)
+                .First();
+            byte bestR = (byte)Math.Clamp(best.R / best.Count, 0, 255);
+            byte bestG = (byte)Math.Clamp(best.G / best.Count, 0, 255);
+            byte bestB = (byte)Math.Clamp(best.B / best.Count, 0, 255);
+            return Color.FromArgb(alpha, bestR, bestG, bestB);
+        }
+        catch
+        {
+            return Color.FromArgb(alpha, fallback.R, fallback.G, fallback.B);
+        }
+    }
+
+    private static double ColorDistance(Color first, Color second)
+    {
+        int red = first.R - second.R;
+        int green = first.G - second.G;
+        int blue = first.B - second.B;
+        return Math.Sqrt(red * red + green * green + blue * blue);
+    }
+
+    private static double GetLuminance(Color color)
+    {
+        return color.R * 0.2126 + color.G * 0.7152 + color.B * 0.0722;
+    }
+
+    private static double GetSaturation(Color color)
+    {
+        double max = Math.Max(color.R, Math.Max(color.G, color.B)) / 255.0;
+        double min = Math.Min(color.R, Math.Min(color.G, color.B)) / 255.0;
+        return max <= 0 ? 0 : (max - min) / max;
+    }
+
+    private sealed class ColorBucket
+    {
+        public int Count { get; set; }
+        public int R { get; set; }
+        public int G { get; set; }
+        public int B { get; set; }
+        public double Distance { get; set; }
+        public double Saturation { get; set; }
+
+        public double Score => Count * (1 + Distance / Math.Max(1, Count * 255.0)) * (0.75 + Saturation / Math.Max(1, Count) * 0.65);
+    }
+
+    private void UpdateTimeline(GlobalSystemMediaTransportControlsSessionTimelineProperties timelineProperties)
+    {
+        TimeSpan duration = timelineProperties.EndTime - timelineProperties.StartTime;
+        TimeSpan position = timelineProperties.Position - timelineProperties.StartTime;
+
+        if (duration <= TimeSpan.Zero)
+        {
+            PositionText.Text = "00:00";
+            DurationText.Text = "--:--";
+            MediaProgressBar.Value = 0;
+            return;
+        }
+
+        if (position < TimeSpan.Zero)
+        {
+            position = TimeSpan.Zero;
+        }
+
+        if (position > duration)
+        {
+            position = duration;
+        }
+
+        PositionText.Text = FormatMediaTime(position);
+        DurationText.Text = FormatMediaTime(duration);
+        MediaProgressBar.Value = Math.Clamp(position.TotalMilliseconds / duration.TotalMilliseconds, 0, 1);
+    }
+
+    private static string FormatMediaTime(TimeSpan time)
+    {
+        return time.TotalHours >= 1
+            ? time.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture)
+            : time.ToString(@"mm\:ss", CultureInfo.InvariantCulture);
     }
 
     private async void PreviousButton_Click(object sender, RoutedEventArgs e)
@@ -444,6 +618,9 @@ public partial class MediaWidgetWindow : Window
         SourceText.Text = "No source";
         PlaybackStatusText.Text = "Stopped";
         PlayPauseButton.Content = "\uE768";
+        PositionText.Text = "00:00";
+        DurationText.Text = "--:--";
+        MediaProgressBar.Value = 0;
         ClearThumbnail();
     }
 
@@ -556,6 +733,7 @@ public partial class MediaWidgetWindow : Window
 
         _currentSession.MediaPropertiesChanged -= CurrentSession_MediaPropertiesChanged;
         _currentSession.PlaybackInfoChanged -= CurrentSession_PlaybackInfoChanged;
+        _currentSession.TimelinePropertiesChanged -= CurrentSession_TimelinePropertiesChanged;
         _currentSession = null;
     }
 }

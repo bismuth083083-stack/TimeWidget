@@ -335,7 +335,7 @@ public partial class AlarmTimerWidgetWindow : Window
         Grid.SetRow(buttons, 2);
         root.Children.Add(buttons);
 
-        dialog.Content = root;
+        dialog.Content = CreateDialogFrame(root);
         dialog.ShowDialog();
     }
 
@@ -350,21 +350,7 @@ public partial class AlarmTimerWidgetWindow : Window
         TextBlock title = CreateDialogTitle("Timer minutes");
         root.Children.Add(title);
 
-        TextBox minutesBox = new()
-        {
-            Text = Math.Max(1, (int)_timerDuration.TotalMinutes).ToString(CultureInfo.InvariantCulture),
-            Width = 90,
-            Height = 34,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            Background = FindBrush("SecondaryBackground"),
-            BorderBrush = FindBrush("BorderBrush"),
-            Foreground = FindBrush("PrimaryText"),
-            FontFamily = new FontFamily("MiSans"),
-            FontSize = 16,
-            FontWeight = FontWeights.Bold,
-            TextAlignment = TextAlignment.Center
-        };
+        TextBox minutesBox = CreateDialogTextBox(Math.Max(1, (int)_timerDuration.TotalMinutes).ToString(CultureInfo.InvariantCulture));
         Grid.SetRow(minutesBox, 1);
         root.Children.Add(minutesBox);
 
@@ -392,7 +378,7 @@ public partial class AlarmTimerWidgetWindow : Window
         Grid.SetRow(buttons, 2);
         root.Children.Add(buttons);
 
-        dialog.Content = root;
+        dialog.Content = CreateDialogFrame(root);
         dialog.ShowDialog();
     }
 
@@ -465,9 +451,32 @@ public partial class AlarmTimerWidgetWindow : Window
     {
         return new Grid
         {
-            Margin = new Thickness(8),
-            Background = FindBrush("MainBackground"),
+            Margin = new Thickness(0),
+            Background = Brushes.Transparent,
             ClipToBounds = true
+        };
+    }
+
+    private Border CreateDialogFrame(Grid root)
+    {
+        return new Border
+        {
+            Margin = new Thickness(0),
+            Padding = new Thickness(16),
+            CornerRadius = new CornerRadius(22),
+            Background = FindBrush("MainBackground"),
+            BorderBrush = FindBrush("BorderBrush"),
+            BorderThickness = new Thickness(1),
+            Child = root,
+            SnapsToDevicePixels = true,
+            Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                BlurRadius = 14,
+                ShadowDepth = 2,
+                Direction = 270,
+                Opacity = 0.18,
+                Color = Colors.Black
+            }
         };
     }
 
@@ -496,6 +505,54 @@ public partial class AlarmTimerWidgetWindow : Window
             FontFamily = new FontFamily("MiSans"),
             FontWeight = FontWeights.Bold
         };
+    }
+
+    private TextBox CreateDialogTextBox(string text)
+    {
+        return new TextBox
+        {
+            Text = text,
+            Width = 90,
+            Height = 34,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = FindBrush("SecondaryBackground"),
+            BorderBrush = FindBrush("BorderBrush"),
+            BorderThickness = new Thickness(1),
+            Foreground = FindBrush("PrimaryText"),
+            CaretBrush = FindBrush("PrimaryText"),
+            FontFamily = new FontFamily("MiSans"),
+            FontSize = 16,
+            FontWeight = FontWeights.Bold,
+            TextAlignment = TextAlignment.Center,
+            Padding = new Thickness(8, 3, 8, 3),
+            FocusVisualStyle = null,
+            Template = CreateRoundedDialogTextBoxTemplate()
+        };
+    }
+
+    private ControlTemplate CreateRoundedDialogTextBoxTemplate()
+    {
+        FrameworkElementFactory contentHost = new(typeof(ScrollViewer), "PART_ContentHost");
+        contentHost.SetValue(FrameworkElement.MarginProperty, new TemplateBindingExtension(Control.PaddingProperty));
+
+        FrameworkElementFactory border = new(typeof(Border), "TextBoxBorder");
+        border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+        border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
+        border.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Control.BorderThicknessProperty));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
+        border.AppendChild(contentHost);
+
+        ControlTemplate template = new(typeof(TextBox));
+        template.VisualTree = border;
+        Trigger focusedTrigger = new()
+        {
+            Property = IsKeyboardFocusedProperty,
+            Value = true
+        };
+        focusedTrigger.Setters.Add(new Setter(Border.BorderBrushProperty, FindBrush("AccentText"), "TextBoxBorder"));
+        template.Triggers.Add(focusedTrigger);
+        return template;
     }
 
     private Brush FindBrush(string key)
