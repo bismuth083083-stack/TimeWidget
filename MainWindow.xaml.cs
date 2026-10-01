@@ -159,6 +159,24 @@ public partial class MainWindow : Window
         performanceWidgetWindow.Show();
     }
 
+    private void OpenNetworkTrafficMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        NetworkTrafficWidgetWindow networkTrafficWidgetWindow = new();
+        networkTrafficWidgetWindow.Show();
+    }
+
+    private void OpenAudioControlMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        AudioControlWidgetWindow audioControlWidgetWindow = new();
+        audioControlWidgetWindow.Show();
+    }
+
+    private void OpenFinanceMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        FinanceWidgetWindow financeWidgetWindow = new();
+        financeWidgetWindow.Show();
+    }
+
     private void UpdateClock()
     {
         DateTime now = DateTime.Now;

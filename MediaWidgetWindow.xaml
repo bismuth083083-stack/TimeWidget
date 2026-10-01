@@ -31,6 +31,75 @@
                       IsCheckable="True"
                       Click="ResizeMenuItem_Click" />
             <Separator />
+            <MenuItem Header="&#x9891;&#x8C31;&#x9AD8;&#x5EA6;&#x500D;&#x7387;"
+                      SubmenuClosed="SpectrumHeightMenuItem_SubmenuClosed">
+                <MenuItem StaysOpenOnClick="True">
+                    <MenuItem.Header>
+                        <StackPanel Width="210" Margin="4,6">
+                            <TextBlock HorizontalAlignment="Right" Margin="0,0,0,5"
+                                       Text="{Binding Value, ElementName=SpectrumHeightSlider, StringFormat={}{0:0.0}x}" />
+                            <Slider x:Name="SpectrumHeightSlider"
+                                    Minimum="0.2" Maximum="5" Value="1"
+                                    TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                    SmallChange="0.1" LargeChange="0.5"
+                                    Height="26" IsMoveToPointEnabled="True"
+                                    AutomationProperties.Name="Spectrum height multiplier"
+                                    ValueChanged="SpectrumHeightSlider_ValueChanged">
+                                <Slider.Template>
+                                    <ControlTemplate TargetType="Slider">
+                                        <Grid Background="Transparent">
+                                            <Border Height="6" CornerRadius="3" Background="#4A5266"
+                                                    VerticalAlignment="Center" />
+                                            <Track x:Name="PART_Track">
+                                                <Track.Resources>
+                                                    <Style TargetType="RepeatButton">
+                                                        <Setter Property="Focusable" Value="False" />
+                                                        <Setter Property="Template">
+                                                            <Setter.Value>
+                                                                <ControlTemplate TargetType="RepeatButton">
+                                                                    <Grid Background="Transparent">
+                                                                        <Border Height="6" CornerRadius="3"
+                                                                                Background="{TemplateBinding Background}"
+                                                                                VerticalAlignment="Center" />
+                                                                    </Grid>
+                                                                </ControlTemplate>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                    </Style>
+                                                </Track.Resources>
+                                                <Track.DecreaseRepeatButton>
+                                                    <RepeatButton Command="Slider.DecreaseLarge" Background="#A7D8FF" />
+                                                </Track.DecreaseRepeatButton>
+                                                <Track.Thumb>
+                                                    <Thumb Width="14" Height="20">
+                                                        <Thumb.Template>
+                                                            <ControlTemplate TargetType="Thumb">
+                                                                <Border CornerRadius="7" Background="#EAF3FF"
+                                                                        BorderBrush="#A7D8FF" BorderThickness="1" />
+                                                            </ControlTemplate>
+                                                        </Thumb.Template>
+                                                    </Thumb>
+                                                </Track.Thumb>
+                                                <Track.IncreaseRepeatButton>
+                                                    <RepeatButton Command="Slider.IncreaseLarge" Background="Transparent" />
+                                                </Track.IncreaseRepeatButton>
+                                            </Track>
+                                        </Grid>
+                                    </ControlTemplate>
+                                </Slider.Template>
+                            </Slider>
+                        </StackPanel>
+                    </MenuItem.Header>
+                </MenuItem>
+                <MenuItem Header="&#x6062;&#x590D;&#x9ED8;&#x8BA4; (1.0x)"
+                          Click="ResetSpectrumHeightMenuItem_Click" />
+            </MenuItem>
+            <MenuItem Header="Refresh recognition"
+                      Click="RefreshRecognitionMenuItem_Click" />
+            <MenuItem x:Name="SeekMenuItem"
+                      Header="Allow progress seeking (experimental)"
+                      IsCheckable="True"
+                      Click="SeekMenuItem_Click" />
             <MenuItem Header="Close"
                       Click="CloseMenuItem_Click" />
         </ContextMenu>
@@ -292,6 +361,10 @@
                          Minimum="0"
                          Maximum="1"
                          Value="0"
+                         PreviewMouseLeftButtonDown="MediaProgressBar_PreviewMouseLeftButtonDown"
+                         PreviewMouseMove="MediaProgressBar_PreviewMouseMove"
+                         PreviewMouseLeftButtonUp="MediaProgressBar_PreviewMouseLeftButtonUp"
+                         LostMouseCapture="MediaProgressBar_LostMouseCapture"
                          Style="{StaticResource MediaProgressStyle}" />
 
             <StackPanel Grid.Row="3"

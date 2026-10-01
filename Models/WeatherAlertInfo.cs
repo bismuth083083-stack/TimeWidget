@@ -12,6 +12,9 @@ public enum AlertLevel
 public sealed class WeatherAlertInfo
 {
     public AlertLevel Level { get; set; }
+    public string WeatherType { get; set; } = string.Empty;
+    public string LocationName { get; set; } = string.Empty;
+    public DateTimeOffset? PublishedAt { get; set; }
     public string Title { get; set; } = "No weather alert";
     public string Description { get; set; } = string.Empty;
     public string LinkText { get; set; } = "China Weather";

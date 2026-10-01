@@ -16,11 +16,15 @@ namespace TimeWidget;
 public partial class MediaWidgetWindow : Window
 {
     private readonly DispatcherTimer _mediaRefreshTimer;
+    private readonly DispatcherTimer _progressRenderTimer;
     private readonly DispatcherTimer _spectrumAnalysisTimer;
     private readonly DispatcherTimer _spectrumRenderTimer;
     private readonly AudioSpectrumService _audioSpectrumService = new();
     private readonly FftSpectrumAnalyzer _spectrumAnalyzer = new();
     private readonly SpectrumSmoother _spectrumSmoother = new();
+    private readonly MediaProgressTracker _progressTracker = new();
+    private readonly SemaphoreSlim _mediaRefreshGate = new(1, 1);
+    private readonly SemaphoreSlim _seekGate = new(1, 1);
     private readonly float[] _fftSamples = new float[FftSpectrumAnalyzer.FftSize];
     private GlobalSystemMediaTransportControlsSessionManager? _sessionManager;
     private GlobalSystemMediaTransportControlsSession? _currentSession;
@@ -29,6 +33,13 @@ public partial class MediaWidgetWindow : Window
     private bool _isLoaded;
     private DateTime _lastSpectrumSampleTime = DateTime.MinValue;
     private DateTime _lastSpectrumRestartTime = DateTime.MinValue;
+    private string? _lastMediaKey;
+    private string? _loadedThumbnailMediaKey;
+    private int _sessionGeneration;
+    private bool _currentSessionCanSeek;
+    private bool _isSeekDragging;
+    private bool _isSeekCommitPending;
+    private DateTime _lastSeekRequestTime = DateTime.MinValue;
 
     public MediaWidgetWindow()
     {
@@ -36,9 +47,15 @@ public partial class MediaWidgetWindow : Window
 
         _mediaRefreshTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromSeconds(1)
+            Interval = TimeSpan.FromSeconds(3)
         };
-        _mediaRefreshTimer.Tick += async (_, _) => await RefreshMediaInfoAsync();
+        _mediaRefreshTimer.Tick += async (_, _) => await RefreshRecognitionAsync(forceReset: false);
+
+        _progressRenderTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(250)
+        };
+        _progressRenderTimer.Tick += (_, _) => RenderProgress(_progressTracker.GetSnapshot());
 
         _spectrumAnalysisTimer = new DispatcherTimer
         {
@@ -65,6 +82,10 @@ public partial class MediaWidgetWindow : Window
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         _settings = SettingsStore.Load();
+        SpectrumControl.HeightMultiplier = _settings.MediaSpectrumHeightMultiplier;
+        _settings.MediaSpectrumHeightMultiplier = SpectrumControl.HeightMultiplier;
+        SpectrumHeightSlider.Value = SpectrumControl.HeightMultiplier;
+        SeekMenuItem.IsChecked = _settings.MediaSeekEnabled;
         Topmost = _settings.MediaTopmost;
         TopmostMenuItem.IsChecked = _settings.MediaTopmost;
         LockMenuItem.IsChecked = _settings.MediaIsLocked;
@@ -76,6 +97,7 @@ public partial class MediaWidgetWindow : Window
             Height = _settings.MediaHeight.Value;
         }
         RestorePosition();
+        UpdateSeekInteractionState();
 
         _audioSpectrumService.Start();
         _spectrumAnalysisTimer.Start();
@@ -83,6 +105,7 @@ public partial class MediaWidgetWindow : Window
 
         await InitializeMediaSessionAsync();
         _mediaRefreshTimer.Start();
+        _progressRenderTimer.Start();
         _isLoaded = true;
     }
 
@@ -90,6 +113,7 @@ public partial class MediaWidgetWindow : Window
     {
         _isClosed = true;
         _mediaRefreshTimer.Stop();
+        _progressRenderTimer.Stop();
         _spectrumAnalysisTimer.Stop();
         _spectrumRenderTimer.Stop();
         SaveSettings();
@@ -132,6 +156,18 @@ public partial class MediaWidgetWindow : Window
     {
         _settings.MediaIsResizable = ResizeMenuItem.IsChecked;
         ApplyResizeMode();
+        SaveSettings();
+    }
+
+    private void SeekMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.MediaSeekEnabled = SeekMenuItem.IsChecked;
+        if (!_settings.MediaSeekEnabled)
+        {
+            CancelSeekInteraction();
+        }
+
+        UpdateSeekInteractionState();
         SaveSettings();
     }
 
@@ -205,8 +241,11 @@ public partial class MediaWidgetWindow : Window
     {
         await Dispatcher.InvokeAsync(() =>
         {
-            if (!_isClosed)
+            if (!_isClosed && ReferenceEquals(sender, _currentSession))
             {
+                // Some players publish the text metadata before the thumbnail is ready.
+                // Let the next refresh retry the cover even when the title did not change.
+                _loadedThumbnailMediaKey = null;
                 _ = RefreshMediaInfoAsync();
             }
         });
@@ -220,7 +259,7 @@ public partial class MediaWidgetWindow : Window
         {
             if (!_isClosed)
             {
-                _ = RefreshMediaInfoAsync();
+                RefreshPlaybackAndTimeline(sender);
             }
         });
     }
@@ -233,7 +272,7 @@ public partial class MediaWidgetWindow : Window
         {
             if (!_isClosed)
             {
-                _ = RefreshMediaInfoAsync();
+                RefreshPlaybackAndTimeline(sender);
             }
         });
     }
@@ -245,8 +284,13 @@ public partial class MediaWidgetWindow : Window
             return;
         }
 
+        CancelSeekInteraction();
         UnsubscribeCurrentSession();
         _currentSession = session;
+        _sessionGeneration++;
+        _lastMediaKey = null;
+        _loadedThumbnailMediaKey = null;
+        _progressTracker.Reset();
 
         if (_currentSession is not null)
         {
@@ -254,6 +298,8 @@ public partial class MediaWidgetWindow : Window
             _currentSession.PlaybackInfoChanged += CurrentSession_PlaybackInfoChanged;
             _currentSession.TimelinePropertiesChanged += CurrentSession_TimelinePropertiesChanged;
         }
+
+        UpdateSeekInteractionState();
     }
 
     private async Task RefreshMediaInfoAsync()
@@ -263,52 +309,84 @@ public partial class MediaWidgetWindow : Window
             return;
         }
 
+        if (!await _mediaRefreshGate.WaitAsync(0))
+        {
+            return;
+        }
+
+        GlobalSystemMediaTransportControlsSession? session = _currentSession;
+        int generation = _sessionGeneration;
+
         try
         {
-            if (_sessionManager is not null)
-            {
-                UpdateCurrentSession(_sessionManager.GetCurrentSession());
-            }
-
-            if (_currentSession is null)
+            if (session is null)
             {
                 ShowNoMedia();
                 return;
             }
 
             GlobalSystemMediaTransportControlsSessionMediaProperties properties =
-                await _currentSession.TryGetMediaPropertiesAsync();
+                await session.TryGetMediaPropertiesAsync();
+            if (_isClosed || generation != _sessionGeneration)
+            {
+                return;
+            }
+
             GlobalSystemMediaTransportControlsSessionPlaybackInfo playbackInfo =
-                _currentSession.GetPlaybackInfo();
+                session.GetPlaybackInfo();
             GlobalSystemMediaTransportControlsSessionTimelineProperties timelineProperties =
-                _currentSession.GetTimelineProperties();
+                session.GetTimelineProperties();
 
-            TitleText.Text = string.IsNullOrWhiteSpace(properties.Title) ? "Unknown title" : properties.Title;
-            ArtistText.Text = string.IsNullOrWhiteSpace(properties.Artist) ? "Unknown artist" : properties.Artist;
-            SourceText.Text = string.IsNullOrWhiteSpace(_currentSession.SourceAppUserModelId)
+            string title = string.IsNullOrWhiteSpace(properties.Title) ? "Unknown title" : properties.Title;
+            string artist = string.IsNullOrWhiteSpace(properties.Artist) ? "Unknown artist" : properties.Artist;
+            string source = string.IsNullOrWhiteSpace(session.SourceAppUserModelId)
                 ? "Unknown source"
-                : _currentSession.SourceAppUserModelId;
-            PlaybackStatusText.Text = GetPlaybackStatusText(playbackInfo.PlaybackStatus);
-            PlayPauseButton.Content = playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing
-                ? "\uE769"
-                : "\uE768";
-            UpdateTimeline(timelineProperties);
+                : session.SourceAppUserModelId;
+            string mediaKey = $"{source}\n{title}\n{artist}\n{properties.AlbumTitle}";
 
-            await UpdateThumbnailAsync(properties.Thumbnail);
+            _progressTracker.SetMedia(mediaKey);
+            TitleText.Text = title;
+            ArtistText.Text = artist;
+            SourceText.Text = source;
+            UpdatePlaybackUi(playbackInfo);
+            SynchronizeTimeline(timelineProperties, playbackInfo);
+
+            bool mediaChanged = !string.Equals(_lastMediaKey, mediaKey, StringComparison.Ordinal);
+            if (mediaChanged)
+            {
+                _lastMediaKey = mediaKey;
+                _loadedThumbnailMediaKey = null;
+                ClearThumbnail();
+            }
+
+            if (!string.Equals(_loadedThumbnailMediaKey, mediaKey, StringComparison.Ordinal)
+                && await TryUpdateThumbnailAsync(properties.Thumbnail, mediaKey, generation))
+            {
+                _loadedThumbnailMediaKey = mediaKey;
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            UpdateCurrentSession(null);
-            ShowNoMedia();
+            System.Diagnostics.Debug.WriteLine($"Media refresh failed: {ex}");
+            if (_currentSession is null)
+            {
+                ShowNoMedia();
+            }
+        }
+        finally
+        {
+            _mediaRefreshGate.Release();
         }
     }
 
-    private async Task UpdateThumbnailAsync(IRandomAccessStreamReference? thumbnail)
+    private async Task<bool> TryUpdateThumbnailAsync(
+        IRandomAccessStreamReference? thumbnail,
+        string mediaKey,
+        int generation)
     {
         if (thumbnail is null)
         {
-            ClearThumbnail();
-            return;
+            return false;
         }
 
         try
@@ -322,6 +400,13 @@ public partial class MediaWidgetWindow : Window
             image.StreamSource = stream;
             image.EndInit();
             image.Freeze();
+
+            if (_isClosed
+                || generation != _sessionGeneration
+                || !string.Equals(_lastMediaKey, mediaKey, StringComparison.Ordinal))
+            {
+                return false;
+            }
 
             AlbumArtShape.Fill = new ImageBrush(image)
             {
@@ -340,15 +425,18 @@ public partial class MediaWidgetWindow : Window
             albumAccent.Freeze();
             ApplyAlbumAccent(albumAccent);
             AlbumArtPlaceholder.Visibility = Visibility.Collapsed;
+            return true;
         }
-        catch
+        catch (Exception ex)
         {
-            ClearThumbnail();
+            System.Diagnostics.Debug.WriteLine($"Album thumbnail refresh failed: {ex.Message}");
+            return false;
         }
     }
 
     private void ClearThumbnail()
     {
+        _loadedThumbnailMediaKey = null;
         AlbumArtShape.Fill = new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF));
         AlbumBlurBackground.Fill = null;
         AlbumBlurBackground.Visibility = Visibility.Collapsed;
@@ -479,32 +567,276 @@ public partial class MediaWidgetWindow : Window
         public double Score => Count * (1 + Distance / Math.Max(1, Count * 255.0)) * (0.75 + Saturation / Math.Max(1, Count) * 0.65);
     }
 
-    private void UpdateTimeline(GlobalSystemMediaTransportControlsSessionTimelineProperties timelineProperties)
+    private void RefreshPlaybackAndTimeline(GlobalSystemMediaTransportControlsSession session)
     {
-        TimeSpan duration = timelineProperties.EndTime - timelineProperties.StartTime;
-        TimeSpan position = timelineProperties.Position - timelineProperties.StartTime;
-
-        if (duration <= TimeSpan.Zero)
+        if (_isClosed || !ReferenceEquals(session, _currentSession))
         {
-            PositionText.Text = "00:00";
-            DurationText.Text = "--:--";
-            MediaProgressBar.Value = 0;
             return;
         }
 
-        if (position < TimeSpan.Zero)
+        try
         {
-            position = TimeSpan.Zero;
+            GlobalSystemMediaTransportControlsSessionPlaybackInfo playbackInfo = session.GetPlaybackInfo();
+            UpdatePlaybackUi(playbackInfo);
+            SynchronizeTimeline(session.GetTimelineProperties(), playbackInfo);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Media timeline refresh failed: {ex}");
+        }
+    }
+
+    private void UpdatePlaybackUi(GlobalSystemMediaTransportControlsSessionPlaybackInfo playbackInfo)
+    {
+        PlaybackStatusText.Text = GetPlaybackStatusText(playbackInfo.PlaybackStatus);
+        PlayPauseButton.Content = playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing
+            ? "\uE769"
+            : "\uE768";
+        _currentSessionCanSeek = playbackInfo.Controls.IsPlaybackPositionEnabled;
+        UpdateSeekInteractionState();
+    }
+
+    private void SynchronizeTimeline(
+        GlobalSystemMediaTransportControlsSessionTimelineProperties timelineProperties,
+        GlobalSystemMediaTransportControlsSessionPlaybackInfo playbackInfo)
+    {
+        MediaTimelineSample sample = new(
+            timelineProperties.StartTime,
+            timelineProperties.EndTime,
+            timelineProperties.MinSeekTime,
+            timelineProperties.MaxSeekTime,
+            timelineProperties.Position,
+            timelineProperties.LastUpdatedTime);
+        bool isPlaying = playbackInfo.PlaybackStatus
+            == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+        double playbackRate = playbackInfo.PlaybackRate ?? 1;
+
+        RenderProgress(_progressTracker.Synchronize(sample, isPlaying, playbackRate));
+    }
+
+    private void RenderProgress(MediaProgressSnapshot progress)
+    {
+        if (_isClosed)
+        {
+            return;
         }
 
-        if (position > duration)
+        if (_isSeekDragging || _isSeekCommitPending)
         {
-            position = duration;
+            return;
         }
 
+        if (!progress.IsAvailable)
+        {
+            PositionText.Text = "00:00";
+            DurationText.Text = "--:--";
+            MediaProgressBar.IsIndeterminate = false;
+            MediaProgressBar.Opacity = 1;
+            MediaProgressBar.Value = 0;
+            UpdateSeekInteractionState();
+            return;
+        }
+
+        MediaProgressBar.IsIndeterminate = false;
+        MediaProgressBar.Opacity = 1;
+        PositionText.Text = FormatMediaTime(progress.Position);
+        DurationText.Text = FormatMediaTime(progress.Duration);
+        MediaProgressBar.Value = Math.Clamp(
+            progress.Position.TotalMilliseconds / progress.Duration.TotalMilliseconds,
+            0,
+            1);
+        UpdateSeekInteractionState();
+    }
+
+    private void MediaProgressBar_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!CanSeekCurrentMedia())
+        {
+            return;
+        }
+
+        _isSeekDragging = true;
+        MediaProgressBar.CaptureMouse();
+        double ratio = GetSeekRatio(e.GetPosition(MediaProgressBar).X);
+        RenderSeekPreview(ratio);
+        _ = TrySeekAsync(ratio, waitForPrevious: false);
+        e.Handled = true;
+    }
+
+    private void MediaProgressBar_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_isSeekDragging || e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        double ratio = GetSeekRatio(e.GetPosition(MediaProgressBar).X);
+        RenderSeekPreview(ratio);
+        if (DateTime.UtcNow - _lastSeekRequestTime >= TimeSpan.FromMilliseconds(150))
+        {
+            _lastSeekRequestTime = DateTime.UtcNow;
+            _ = TrySeekAsync(ratio, waitForPrevious: false);
+        }
+
+        e.Handled = true;
+    }
+
+    private async void MediaProgressBar_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_isSeekDragging)
+        {
+            return;
+        }
+
+        double ratio = GetSeekRatio(e.GetPosition(MediaProgressBar).X);
+        RenderSeekPreview(ratio);
+        _isSeekDragging = false;
+        _isSeekCommitPending = true;
+        MediaProgressBar.ReleaseMouseCapture();
+        e.Handled = true;
+
+        bool changed = await TrySeekAsync(ratio, waitForPrevious: true);
+        _isSeekCommitPending = false;
+        if (_isClosed)
+        {
+            return;
+        }
+
+        if (changed && _currentSession is not null)
+        {
+            await Task.Delay(120);
+            RefreshPlaybackAndTimeline(_currentSession);
+        }
+        else
+        {
+            RenderProgress(_progressTracker.GetSnapshot());
+        }
+    }
+
+    private void MediaProgressBar_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        if (!_isSeekDragging)
+        {
+            return;
+        }
+
+        _isSeekDragging = false;
+        RenderProgress(_progressTracker.GetSnapshot());
+    }
+
+    private async Task<bool> TrySeekAsync(double ratio, bool waitForPrevious)
+    {
+        bool entered = waitForPrevious
+            ? await _seekGate.WaitAsync(TimeSpan.FromSeconds(1))
+            : await _seekGate.WaitAsync(0);
+        if (!entered)
+        {
+            return false;
+        }
+
+        try
+        {
+            GlobalSystemMediaTransportControlsSession? session = _currentSession;
+            if (_isClosed || session is null || !CanSeekCurrentMedia())
+            {
+                return false;
+            }
+
+            TimeSpan? target = GetAbsoluteSeekPosition(session, ratio);
+            if (!target.HasValue)
+            {
+                return false;
+            }
+
+            return await session.TryChangePlaybackPositionAsync(target.Value.Ticks).AsTask();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Media seek failed: {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            _seekGate.Release();
+        }
+    }
+
+    private bool CanSeekCurrentMedia()
+    {
+        return _settings.MediaSeekEnabled
+            && _currentSession is not null
+            && _currentSessionCanSeek
+            && _progressTracker.GetSnapshot().IsAvailable;
+    }
+
+    private static TimeSpan? GetAbsoluteSeekPosition(
+        GlobalSystemMediaTransportControlsSession session,
+        double ratio)
+    {
+        GlobalSystemMediaTransportControlsSessionTimelineProperties timeline = session.GetTimelineProperties();
+        TimeSpan start;
+        TimeSpan duration;
+        if (timeline.EndTime > timeline.StartTime)
+        {
+            start = timeline.StartTime;
+            duration = timeline.EndTime - timeline.StartTime;
+        }
+        else if (timeline.MaxSeekTime > timeline.MinSeekTime)
+        {
+            start = timeline.MinSeekTime;
+            duration = timeline.MaxSeekTime - timeline.MinSeekTime;
+        }
+        else
+        {
+            return null;
+        }
+
+        return start + TimeSpan.FromTicks((long)(duration.Ticks * Math.Clamp(ratio, 0, 1)));
+    }
+
+    private double GetSeekRatio(double pointerX)
+    {
+        return MediaProgressBar.ActualWidth <= 0
+            ? 0
+            : Math.Clamp(pointerX / MediaProgressBar.ActualWidth, 0, 1);
+    }
+
+    private void RenderSeekPreview(double ratio)
+    {
+        MediaProgressSnapshot progress = _progressTracker.GetSnapshot();
+        if (!progress.IsAvailable)
+        {
+            return;
+        }
+
+        TimeSpan position = TimeSpan.FromTicks((long)(progress.Duration.Ticks * Math.Clamp(ratio, 0, 1)));
         PositionText.Text = FormatMediaTime(position);
-        DurationText.Text = FormatMediaTime(duration);
-        MediaProgressBar.Value = Math.Clamp(position.TotalMilliseconds / duration.TotalMilliseconds, 0, 1);
+        DurationText.Text = FormatMediaTime(progress.Duration);
+        MediaProgressBar.Value = Math.Clamp(ratio, 0, 1);
+    }
+
+    private void UpdateSeekInteractionState()
+    {
+        bool hasTimeline = _progressTracker.GetSnapshot().IsAvailable;
+        bool enabled = _settings.MediaSeekEnabled && _currentSessionCanSeek && hasTimeline;
+        MediaProgressBar.Cursor = enabled ? Cursors.Hand : Cursors.Arrow;
+        MediaProgressBar.ToolTip = !_settings.MediaSeekEnabled
+            ? "Enable experimental progress seeking from the right-click menu."
+            : !_currentSessionCanSeek
+                ? "The current player does not expose playback seeking to Windows."
+                : hasTimeline
+                    ? "Click or drag to change playback position."
+                    : "The current player has not provided a usable duration.";
+    }
+
+    private void CancelSeekInteraction()
+    {
+        _isSeekDragging = false;
+        _isSeekCommitPending = false;
+        if (MediaProgressBar.IsMouseCaptured)
+        {
+            MediaProgressBar.ReleaseMouseCapture();
+        }
     }
 
     private static string FormatMediaTime(TimeSpan time)
@@ -613,6 +945,11 @@ public partial class MediaWidgetWindow : Window
 
     private void ShowNoMedia()
     {
+        CancelSeekInteraction();
+        _currentSessionCanSeek = false;
+        _lastMediaKey = null;
+        _loadedThumbnailMediaKey = null;
+        _progressTracker.Reset();
         TitleText.Text = "No media playing";
         ArtistText.Text = "Unknown artist";
         SourceText.Text = "No source";
@@ -620,7 +957,10 @@ public partial class MediaWidgetWindow : Window
         PlayPauseButton.Content = "\uE768";
         PositionText.Text = "00:00";
         DurationText.Text = "--:--";
+        MediaProgressBar.IsIndeterminate = false;
+        MediaProgressBar.Opacity = 1;
         MediaProgressBar.Value = 0;
+        UpdateSeekInteractionState();
         ClearThumbnail();
     }
 
@@ -638,6 +978,68 @@ public partial class MediaWidgetWindow : Window
     private void CloseMenuItem_Click(object sender, RoutedEventArgs e)
     {
         Close();
+    }
+
+    private void SpectrumHeightSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        // ValueChanged also fires while InitializeComponent is creating the controls.
+        if (!_isLoaded || _isClosed) return;
+        _settings.MediaSpectrumHeightMultiplier = Math.Round(e.NewValue, 1);
+        SpectrumControl.HeightMultiplier = _settings.MediaSpectrumHeightMultiplier;
+    }
+
+    private void ResetSpectrumHeightMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        SpectrumHeightSlider.Value = 1.0;
+    }
+
+    private void SpectrumHeightMenuItem_SubmenuClosed(object sender, RoutedEventArgs e)
+    {
+        if (!_isLoaded || _isClosed) return;
+        try
+        {
+            SettingsStore.Update(settings => settings.MediaSpectrumHeightMultiplier = _settings.MediaSpectrumHeightMultiplier);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Spectrum height setting save failed: {ex.Message}");
+        }
+    }
+
+    private async void RefreshRecognitionMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        await RefreshRecognitionAsync(forceReset: true);
+    }
+
+    private async Task RefreshRecognitionAsync(bool forceReset)
+    {
+        try
+        {
+            if (_isClosed)
+            {
+                return;
+            }
+
+            if (_sessionManager is null)
+            {
+                await InitializeMediaSessionAsync();
+                return;
+            }
+
+            UpdateCurrentSession(_sessionManager.GetCurrentSession());
+            if (forceReset)
+            {
+                _lastMediaKey = null;
+                _loadedThumbnailMediaKey = null;
+                _progressTracker.Reset();
+            }
+
+            await RefreshMediaInfoAsync();
+        }
+        catch
+        {
+            ShowNoMedia();
+        }
     }
 
     private void RestorePosition()
@@ -661,6 +1063,8 @@ public partial class MediaWidgetWindow : Window
             settings.MediaTopmost = Topmost;
             settings.MediaIsLocked = LockMenuItem.IsChecked;
             settings.MediaIsResizable = ResizeMenuItem.IsChecked;
+            settings.MediaSeekEnabled = SeekMenuItem.IsChecked;
+            settings.MediaSpectrumHeightMultiplier = _settings.MediaSpectrumHeightMultiplier;
         });
     }
 

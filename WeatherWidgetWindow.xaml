@@ -49,6 +49,16 @@
                 <MenuItem Header="Chengdu"
                           Tag="101270101"
                           Click="ChooseCityMenuItem_Click" />
+                <Separator />
+                <MenuItem Header="Nantong"
+                          Tag="101190501"
+                          Click="ChooseCityMenuItem_Click" />
+                <MenuItem Header="Xinyang"
+                          Tag="101180601"
+                          Click="ChooseCityMenuItem_Click" />
+                <MenuItem Header="Xuchang"
+                          Tag="101180401"
+                          Click="ChooseCityMenuItem_Click" />
             </MenuItem>
             <MenuItem Header="&#x9000;&#x51FA;"
                       Click="ExitMenuItem_Click" />
@@ -97,7 +107,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="48" />
                 <RowDefinition Height="*" />
-                <RowDefinition Height="42" />
+                <RowDefinition Height="46" />
             </Grid.RowDefinitions>
 
             <Grid Grid.Row="0">
@@ -222,40 +232,44 @@
 
             <Border x:Name="AlertBar"
                     Grid.Row="2"
-                    Height="38"
+                    Height="42"
                     CornerRadius="13"
                     BorderThickness="1"
                     Padding="12,0">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="128" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <TextBlock x:Name="AlertTitleText"
+                    <TextBlock x:Name="AlertTypesText"
                                Grid.Column="0"
                                VerticalAlignment="Center"
                                FontFamily="MiSans"
-                               FontSize="12"
+                               FontSize="13.5"
                                FontWeight="Bold"
                                TextTrimming="CharacterEllipsis" />
-                    <TextBlock x:Name="AlertDescriptionText"
+
+                    <TextBlock x:Name="AlertLocationText"
                                Grid.Column="1"
                                VerticalAlignment="Center"
-                               Margin="8,0,12,0"
+                               MaxWidth="70"
+                               Margin="10,0,10,0"
                                FontFamily="MiSans"
-                               FontSize="12"
+                               FontSize="11"
                                FontWeight="Bold"
+                               Opacity="0.78"
                                TextTrimming="CharacterEllipsis" />
+
                     <TextBlock Grid.Column="2"
                                VerticalAlignment="Center"
                                FontFamily="MiSans"
-                               FontSize="12"
+                               FontSize="11"
                                FontWeight="Bold">
                         <Hyperlink x:Name="ChinaWeatherLink"
                                    RequestNavigate="ChinaWeatherLink_RequestNavigate">
-                            China Weather
+                            Details
                         </Hyperlink>
                     </TextBlock>
                 </Grid>

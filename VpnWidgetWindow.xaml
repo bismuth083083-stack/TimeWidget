@@ -20,24 +20,24 @@
     <Window.ContextMenu>
         <ContextMenu>
             <MenuItem x:Name="TopmostMenuItem"
-                      Header="缃《"
+                      Header="&#x7F6E;&#x9876;"
                       IsCheckable="True"
                       IsChecked="True"
                       Click="TopmostMenuItem_Click" />
             <MenuItem x:Name="LockMenuItem"
-                      Header="閿佸畾浣嶇疆"
+                      Header="&#x9501;&#x5B9A;&#x4F4D;&#x7F6E;"
                       IsCheckable="True"
                       Click="LockMenuItem_Click" />
             <MenuItem x:Name="ResizeMenuItem"
-                      Header="鍏佽璋冩暣澶у皬"
+                      Header="&#x5141;&#x8BB8;&#x8C03;&#x6574;&#x5927;&#x5C0F;"
                       IsCheckable="True"
                       Click="ResizeMenuItem_Click" />
             <Separator />
             <MenuItem Header="Refresh status"
                       Click="RefreshMenuItem_Click" />
-            <MenuItem Header="閲嶆柊閫夋嫨 Sharkcloud"
+            <MenuItem Header="&#x91CD;&#x65B0;&#x9009;&#x62E9; Sharkcloud"
                       Click="ChooseSharkcloudMenuItem_Click" />
-            <MenuItem Header="閲嶆柊閫夋嫨 FLClash"
+            <MenuItem Header="&#x91CD;&#x65B0;&#x9009;&#x62E9; FLClash"
                       Click="ChooseFlClashMenuItem_Click" />
             <Separator />
             <MenuItem Header="Exit"

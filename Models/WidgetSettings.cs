@@ -24,6 +24,8 @@ public sealed class WidgetSettings
     public bool MediaTopmost { get; set; } = true;
     public bool MediaIsLocked { get; set; }
     public bool MediaIsResizable { get; set; }
+    public bool MediaSeekEnabled { get; set; }
+    public double MediaSpectrumHeightMultiplier { get; set; } = 1.0;
     public double? WeatherLeft { get; set; }
     public double? WeatherTop { get; set; }
     public double? WeatherWidth { get; set; }
@@ -76,4 +78,23 @@ public sealed class WidgetSettings
     public double? PerformanceTop { get; set; }
     public bool PerformanceTopmost { get; set; } = true;
     public bool PerformanceIsLocked { get; set; }
+    public double? NetworkTrafficLeft { get; set; }
+    public double? NetworkTrafficTop { get; set; }
+    public bool NetworkTrafficTopmost { get; set; } = true;
+    public bool NetworkTrafficIsLocked { get; set; }
+    public double? AudioControlLeft { get; set; }
+    public double? AudioControlTop { get; set; }
+    public bool AudioControlTopmost { get; set; } = true;
+    public bool AudioControlIsLocked { get; set; }
+    public string AudioControlSelectedTab { get; set; } = "Mixer";
+    public string? AudioControlSelectedSessionKey { get; set; }
+    public bool AudioControlSwitchCommunications { get; set; }
+    public double? FinanceLeft { get; set; }
+    public double? FinanceTop { get; set; }
+    public bool FinanceTopmost { get; set; } = true;
+    public bool FinanceIsLocked { get; set; }
+    public string FinanceSelectedTab { get; set; } = "Transactions";
+    public string FinanceTransactionFilter { get; set; } = "Month";
+    public string FinancePurchaseFilter { get; set; } = "Pending";
+    public string FinanceCurrencyCode { get; set; } = "CNY";
 }

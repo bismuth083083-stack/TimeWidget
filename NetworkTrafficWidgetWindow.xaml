@@ -1,0 +1,169 @@
+<Window x:Class="TimeWidget.NetworkTrafficWidgetWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Network Traffic"
+        Width="360"
+        Height="160"
+        MinWidth="360"
+        MaxWidth="360"
+        MinHeight="160"
+        MaxHeight="160"
+        SizeToContent="Manual"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Loaded="Window_Loaded"
+        Closing="Window_Closing"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+    <Window.ContextMenu>
+        <ContextMenu>
+            <MenuItem x:Name="TopmostMenuItem"
+                      Header="置顶"
+                      IsCheckable="True"
+                      IsChecked="True"
+                      Click="TopmostMenuItem_Click" />
+            <MenuItem x:Name="LockMenuItem"
+                      Header="锁定位置"
+                      IsCheckable="True"
+                      Click="LockMenuItem_Click" />
+            <Separator />
+            <MenuItem Header="重置累计流量"
+                      Click="ResetTotalsMenuItem_Click" />
+            <MenuItem Header="退出"
+                      Click="ExitMenuItem_Click" />
+        </ContextMenu>
+    </Window.ContextMenu>
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="PrimaryText" Color="#EAF3FF" />
+        <SolidColorBrush x:Key="SecondaryText" Color="#AAB8C8" />
+        <SolidColorBrush x:Key="MutedText" Color="#7F8EA3" />
+        <SolidColorBrush x:Key="DownloadBrush" Color="#A7D8FF" />
+        <SolidColorBrush x:Key="UploadBrush" Color="#7EC8A9" />
+    </Window.Resources>
+
+    <Border Margin="8"
+            CornerRadius="22"
+            Background="#F21F1E33"
+            BorderBrush="#33FFFFFF"
+            BorderThickness="1"
+            SnapsToDevicePixels="True">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="14"
+                              ShadowDepth="2"
+                              Direction="270"
+                              Opacity="0.18"
+                              Color="#000000" />
+        </Border.Effect>
+
+        <Grid Margin="18,13,18,12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="26" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="22" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0">
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse x:Name="StatusDot"
+                             Width="7"
+                             Height="7"
+                             Margin="0,0,8,0"
+                             VerticalAlignment="Center"
+                             Fill="{StaticResource UploadBrush}" />
+                    <TextBlock VerticalAlignment="Center"
+                               FontFamily="MiSans"
+                               FontSize="17"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource PrimaryText}"
+                               Text="Traffic" />
+                </StackPanel>
+                <TextBlock x:Name="StatusText"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Center"
+                           FontFamily="MiSans"
+                           FontSize="10"
+                           FontWeight="Bold"
+                           Foreground="{StaticResource MutedText}"
+                           Text="LIVE" />
+            </Grid>
+
+            <Grid Grid.Row="1" Margin="0,3,0,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="1" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock FontFamily="MiSans"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource MutedText}"
+                               Text="DOWNLOAD" />
+                    <TextBlock x:Name="DownloadText"
+                               Margin="0,1,8,0"
+                               FontFamily="MiSans"
+                               FontSize="25"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource DownloadBrush}"
+                               Text="0 B/s"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <Border Grid.Column="1"
+                        Margin="0,5"
+                        Background="#334A566A" />
+
+                <StackPanel Grid.Column="2"
+                            Margin="16,0,0,0"
+                            VerticalAlignment="Center">
+                    <TextBlock FontFamily="MiSans"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource MutedText}"
+                               Text="UPLOAD" />
+                    <TextBlock x:Name="UploadText"
+                               Margin="0,1,0,0"
+                               FontFamily="MiSans"
+                               FontSize="25"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource UploadBrush}"
+                               Text="0 B/s"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Grid>
+
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="112" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="SessionTotalText"
+                           Grid.Column="0"
+                           Margin="0,0,10,0"
+                           VerticalAlignment="Center"
+                           FontFamily="MiSans"
+                           FontSize="10"
+                           FontWeight="Bold"
+                           Foreground="{StaticResource SecondaryText}"
+                           Text="Session  D 0 B  U 0 B"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="AdapterText"
+                           Grid.Column="1"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Center"
+                           TextAlignment="Right"
+                           FontFamily="MiSans"
+                           FontSize="10"
+                           FontWeight="Bold"
+                           Foreground="{StaticResource MutedText}"
+                           Text="Detecting..."
+                           TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

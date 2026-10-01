@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Navigation;
@@ -14,14 +15,16 @@ namespace TimeWidget;
 
 public partial class WeatherWidgetWindow : Window
 {
-    private static readonly TimeSpan AutoRefreshInterval = TimeSpan.FromHours(3);
+    private static readonly TimeSpan AutoRefreshInterval = ChinaWeatherAlertService.RefreshInterval;
     private static readonly TimeSpan ManualRefreshCooldown = TimeSpan.FromSeconds(30);
 
     private readonly DispatcherTimer _refreshTimer;
     private readonly WeatherService _weatherService = new();
     private readonly LocationService _locationService = new();
+    private readonly CancellationTokenSource _refreshCancellation = new();
     private WidgetSettings _settings = new();
     private WeatherAlertInfo _currentAlert = new();
+    private List<WeatherAlertInfo> _currentAlerts = [];
     private WeatherCityInfo _currentCity = ChinaWeatherCityCatalog.DefaultCity;
     private DateTimeOffset _lastManualRefresh = DateTimeOffset.MinValue;
     private bool _isRefreshing;
@@ -36,7 +39,7 @@ public partial class WeatherWidgetWindow : Window
         {
             Interval = AutoRefreshInterval
         };
-        _refreshTimer.Tick += async (_, _) => await RefreshWeatherAsync(forceRefresh: true, isManual: false);
+        _refreshTimer.Tick += async (_, _) => await RefreshWeatherAsync(forceRefresh: false, isManual: false);
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -56,6 +59,7 @@ public partial class WeatherWidgetWindow : Window
 
         _currentCity = ChinaWeatherCityCatalog.FindByCode(_settings.WeatherCityCode);
         await LoadInitialWeatherAsync();
+        if (_isClosed) return;
         _refreshTimer.Start();
         _isLoaded = true;
     }
@@ -64,6 +68,8 @@ public partial class WeatherWidgetWindow : Window
     {
         _isClosed = true;
         _refreshTimer.Stop();
+        _refreshCancellation.Cancel();
+        _refreshCancellation.Dispose();
         SaveSettings();
     }
 
@@ -140,7 +146,8 @@ public partial class WeatherWidgetWindow : Window
     private async Task LoadInitialWeatherAsync()
     {
         WeatherSnapshot? cached = await _weatherService.TryLoadCacheAsync();
-        if (cached is not null)
+        if (_isClosed) return;
+        if (cached is not null && cached.CityCode == _currentCity.Code)
         {
             ApplySnapshot(cached);
             if (!string.IsNullOrWhiteSpace(cached.CityCode))
@@ -168,6 +175,7 @@ public partial class WeatherWidgetWindow : Window
         ShowStatus("Requesting location permission...");
 
         LocationResult location = await _locationService.GetCurrentLocationAsync();
+        if (_isClosed) return;
         if (!location.IsAllowed)
         {
             _settings.WeatherLocationDenied = true;
@@ -209,29 +217,40 @@ public partial class WeatherWidgetWindow : Window
 
         _isRefreshing = true;
         ShowStatus("Updating weather...");
+        WeatherCityInfo requestedCity = _currentCity;
 
         try
         {
-            WeatherSnapshot snapshot = await _weatherService.GetWeatherAsync(_currentCity, forceRefresh);
-            if (!_isClosed)
+            WeatherSnapshot snapshot = await _weatherService.GetWeatherAsync(requestedCity, forceRefresh, _refreshCancellation.Token);
+            if (!_isClosed && requestedCity.Code == _currentCity.Code)
             {
                 ApplySnapshot(snapshot);
             }
         }
+        catch (OperationCanceledException) when (_isClosed) { }
         catch (Exception ex)
         {
             Debug.WriteLine($"Weather refresh failed: {ex}");
-            ShowStatus("Unable to update weather.");
+            if (!_isClosed) ShowStatus("Unable to update weather.");
         }
         finally
         {
             _isRefreshing = false;
+            if (!_isClosed && requestedCity.Code != _currentCity.Code)
+            {
+                await RefreshWeatherAsync(forceRefresh: true, isManual: false);
+            }
         }
     }
 
     private void ApplySnapshot(WeatherSnapshot snapshot)
     {
-        _currentAlert = snapshot.Alert;
+        _currentAlerts = snapshot.Alerts.Count > 0
+            ? snapshot.Alerts
+            : snapshot.Alert.Level != AlertLevel.None
+                ? [snapshot.Alert]
+                : [];
+        _currentAlert = _currentAlerts.FirstOrDefault() ?? snapshot.Alert;
         _currentCity = ChinaWeatherCityCatalog.FindByCode(snapshot.CityCode);
         _settings.WeatherCityCode = snapshot.CityCode;
         _settings.WeatherCityName = snapshot.CityName;
@@ -240,7 +259,16 @@ public partial class WeatherWidgetWindow : Window
         CityText.Text = snapshot.CityName;
         UpdatedText.Text = $"Updated {snapshot.UpdatedAt.LocalDateTime.ToString("HH:mm", CultureInfo.InvariantCulture)}";
         DaysItemsControl.ItemsSource = snapshot.Days;
-        ApplyAlert(snapshot.Alert);
+        ApplyAlerts(_currentAlerts, _currentAlert);
+        if (_currentAlerts.Count == 0 && !snapshot.AlertsAreCurrent)
+        {
+            AlertTypesText.Text = "Alerts unavailable";
+        }
+        string alertChecked = snapshot.AlertsUpdatedAt is { } alertTime
+            ? $"Alerts checked {alertTime.LocalDateTime:MM/dd HH:mm}"
+            : "Alerts not checked yet";
+        AlertBar.ToolTip = $"{alertChecked}\n{snapshot.AlertStatusMessage}\n{AlertBar.ToolTip}";
+        AlertBar.Opacity = snapshot.AlertsAreCurrent ? 1 : 0.65;
 
         if (snapshot.Days.Count == 0)
         {
@@ -248,7 +276,7 @@ public partial class WeatherWidgetWindow : Window
         }
         else
         {
-            ShowStatus(snapshot.IsFromCache ? snapshot.StatusMessage ?? "Showing cached weather." : string.Empty);
+            ShowStatus(snapshot.AlertStatusMessage ?? (snapshot.IsFromCache ? snapshot.StatusMessage ?? "Showing cached weather." : string.Empty));
         }
     }
 
@@ -257,32 +285,85 @@ public partial class WeatherWidgetWindow : Window
         StatusText.Text = message;
     }
 
-    private void ApplyAlert(WeatherAlertInfo alert)
+    private void ApplyAlerts(IReadOnlyList<WeatherAlertInfo> alerts, WeatherAlertInfo fallback)
     {
-        AlertBar.Background = GetAlertBackgroundBrush(alert.Level);
-        AlertBar.BorderBrush = GetAlertBorderBrush(alert.Level);
+        WeatherAlertInfo primary = alerts.FirstOrDefault() ?? fallback;
+        AlertBar.Background = GetAlertBackgroundBrush(primary.Level);
+        AlertBar.BorderBrush = GetAlertBorderBrush(primary.Level);
 
-        Brush foreground = GetAlertForegroundBrush(alert.Level);
-        AlertTitleText.Foreground = foreground;
-        AlertDescriptionText.Foreground = foreground;
+        Brush foreground = GetAlertForegroundBrush(primary.Level);
+        AlertTypesText.Foreground = foreground;
+        AlertLocationText.Foreground = foreground;
         ChinaWeatherLink.Foreground = foreground;
 
-        AlertTitleText.Text = $"{alert.Level}: {alert.Title}";
-        AlertDescriptionText.Text = alert.Description;
+        AlertTypesText.Text = alerts.Count == 0
+            ? "No active alerts"
+            : string.Join(" · ", alerts
+                .Select(GetAlertType)
+                .Distinct(StringComparer.OrdinalIgnoreCase));
+        AlertLocationText.Text = !string.IsNullOrWhiteSpace(primary.LocationName)
+            ? primary.LocationName
+            : _currentCity.Name;
+        AlertBar.ToolTip = alerts.Count == 0
+            ? primary.Description
+            : string.Join("\n\n", alerts.Select(alert =>
+                $"{GetAlertType(alert)} · {AlertLocationText.Text}\n{alert.Description}"));
+
         ChinaWeatherLink.Inlines.Clear();
-        ChinaWeatherLink.Inlines.Add(string.IsNullOrWhiteSpace(alert.LinkText) ? "China Weather" : alert.LinkText);
-        ChinaWeatherLink.NavigateUri = Uri.TryCreate(alert.LinkUrl, UriKind.Absolute, out Uri? uri)
+        ChinaWeatherLink.Inlines.Add(alerts.Count switch
+        {
+            > 1 => $"{alerts.Count} alerts  ›",
+            1 => "Details  ›",
+            _ => "China Weather  ›"
+        });
+        ChinaWeatherLink.NavigateUri = Uri.TryCreate(primary.LinkUrl, UriKind.Absolute, out Uri? uri)
             ? uri
             : new Uri("http://www.weather.com.cn/");
     }
 
+    private static string GetAlertType(WeatherAlertInfo alert)
+    {
+        return string.IsNullOrWhiteSpace(alert.WeatherType) ? "Weather alert" : alert.WeatherType;
+    }
+
     private void ChinaWeatherLink_RequestNavigate(object sender, RequestNavigateEventArgs e)
     {
+        if (_currentAlerts.Count > 1)
+        {
+            ShowAlertsMenu();
+            e.Handled = true;
+            return;
+        }
+
         string url = string.IsNullOrWhiteSpace(_currentAlert.LinkUrl)
             ? "http://www.weather.com.cn/"
             : _currentAlert.LinkUrl;
 
         OpenExternalUri(url, "Unable to open weather link");
+        e.Handled = true;
+    }
+
+    private void ShowAlertsMenu()
+    {
+        ContextMenu menu = new()
+        {
+            PlacementTarget = AlertBar,
+            Placement = PlacementMode.Bottom
+        };
+
+        foreach (WeatherAlertInfo alert in _currentAlerts)
+        {
+            MenuItem item = new()
+            {
+                Header = $"{GetAlertType(alert)}  ·  {alert.LocationName}",
+                Foreground = GetAlertForegroundBrush(alert.Level),
+                ToolTip = alert.Description
+            };
+            item.Click += (_, _) => OpenExternalUri(alert.LinkUrl, "Unable to open weather alert");
+            menu.Items.Add(item);
+        }
+
+        menu.IsOpen = true;
     }
 
     private void LocationSettingsButton_Click(object sender, RoutedEventArgs e)

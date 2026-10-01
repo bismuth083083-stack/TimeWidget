@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.IO;
 using System.Windows;
 using TimeWidget.Services;
 using Forms = System.Windows.Forms;
@@ -8,11 +9,20 @@ namespace TimeWidget;
 public partial class App : Application
 {
     private Forms.NotifyIcon? _trayIcon;
+    private Icon? _applicationIcon;
+    private Stream? _applicationIconStream;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        StartupService.EnableCurrentUserStartup();
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("TIMEWIDGET_SKIP_STARTUP_REGISTRATION"),
+                "1",
+                StringComparison.Ordinal))
+        {
+            StartupService.EnableCurrentUserStartup();
+        }
+
         InitializeTrayIcon();
     }
 
@@ -24,6 +34,11 @@ public partial class App : Application
             _trayIcon.Dispose();
             _trayIcon = null;
         }
+
+        _applicationIcon?.Dispose();
+        _applicationIcon = null;
+        _applicationIconStream?.Dispose();
+        _applicationIconStream = null;
 
         base.OnExit(e);
     }
@@ -42,17 +57,41 @@ public partial class App : Application
         menu.Items.Add("Open VPN Shortcuts", null, (_, _) => ShowWindow(new VpnWidgetWindow()));
         menu.Items.Add("Open Quick Settings", null, (_, _) => ShowWindow(new SettingsWidgetWindow()));
         menu.Items.Add("Open Performance Widget", null, (_, _) => ShowWindow(new PerformanceWidgetWindow()));
+        menu.Items.Add("Open Network Traffic", null, (_, _) => ShowOrCreateWindow<NetworkTrafficWidgetWindow>());
+        menu.Items.Add("Open Audio Control", null, (_, _) => ShowWindow(new AudioControlWidgetWindow()));
+        menu.Items.Add("Open Finance Widget", null, (_, _) => ShowWindow(new FinanceWidgetWindow()));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => Shutdown());
 
         _trayIcon = new Forms.NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = LoadApplicationIcon(),
             Text = "Desktop Mini Widgets",
             ContextMenuStrip = menu,
             Visible = true
         };
         _trayIcon.DoubleClick += (_, _) => ShowOrCreateWindow<MainWindow>();
+    }
+
+    private Icon LoadApplicationIcon()
+    {
+        try
+        {
+            var resource = GetResourceStream(
+                new Uri("pack://application:,,,/Assets/AppIcon.ico", UriKind.Absolute));
+            if (resource is not null)
+            {
+                _applicationIconStream = resource.Stream;
+                _applicationIcon = new Icon(_applicationIconStream);
+                return _applicationIcon;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Unable to load the application icon: {ex}");
+        }
+
+        return SystemIcons.Application;
     }
 
     private static void ShowOrCreateWindow<TWindow>()

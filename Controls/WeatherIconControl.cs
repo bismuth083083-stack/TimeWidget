@@ -38,17 +38,17 @@ public sealed class WeatherIconControl : FrameworkElement
             DrawRain(drawingContext, size, 2);
             DrawLightning(drawingContext, size);
         }
-        else if (text.Contains("rain") || text.Contains("drizzle"))
+        else if (text.Contains("rain") || text.Contains("drizzle") || text.Contains("shower"))
         {
             DrawCloud(drawingContext, size, false);
             DrawRain(drawingContext, size, 3);
         }
-        else if (text.Contains("snow"))
+        else if (text.Contains("snow") || text.Contains("sleet"))
         {
             DrawCloud(drawingContext, size, false);
             DrawSnow(drawingContext, size);
         }
-        else if (text.Contains("fog"))
+        else if (text.Contains("fog") || text.Contains("haze") || text.Contains("dust"))
         {
             DrawCloud(drawingContext, size, false);
             DrawFog(drawingContext, size);
@@ -58,7 +58,7 @@ public sealed class WeatherIconControl : FrameworkElement
             DrawSun(drawingContext, size, 0.34, 0.36, 0.26);
             DrawCloud(drawingContext, size, false);
         }
-        else if (text.Contains("cloud"))
+        else if (text.Contains("cloud") || text.Contains("overcast"))
         {
             DrawCloud(drawingContext, size, false);
         }

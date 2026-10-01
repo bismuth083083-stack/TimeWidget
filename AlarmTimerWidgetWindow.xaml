@@ -16,20 +16,20 @@
     <Window.ContextMenu>
         <ContextMenu>
             <MenuItem x:Name="TopmostMenuItem"
-                      Header="缃《"
+                      Header="&#x7F6E;&#x9876;"
                       IsCheckable="True"
                       IsChecked="True"
                       Click="TopmostMenuItem_Click" />
             <MenuItem x:Name="LockMenuItem"
-                      Header="閿佸畾浣嶇疆"
+                      Header="&#x9501;&#x5B9A;&#x4F4D;&#x7F6E;"
                       IsCheckable="True"
                       Click="LockMenuItem_Click" />
             <Separator />
-            <MenuItem Header="鏂板闂归挓"
+            <MenuItem Header="&#x65B0;&#x589E;&#x95F9;&#x949F;"
                       Click="AddAlarmMenuItem_Click" />
             <MenuItem Header="Stop all ringing"
                       Click="StopAllRingingMenuItem_Click" />
-            <MenuItem Header="閲嶇疆璁℃椂"
+            <MenuItem Header="&#x91CD;&#x7F6E;&#x8BA1;&#x65F6;"
                       Click="ResetAllMenuItem_Click" />
             <MenuItem Header="Exit"
                       Click="ExitMenuItem_Click" />

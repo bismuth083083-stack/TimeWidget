@@ -10,17 +10,26 @@ namespace TimeWidget.Services;
 
 public sealed class WeatherSnapshot
 {
+    public string DataSource { get; init; } = WeatherService.DataSourceName;
     public string CityName { get; init; } = "Beijing";
     public string CityCode { get; init; } = "101010100";
     public DateTimeOffset UpdatedAt { get; init; }
     public List<WeatherDayInfo> Days { get; init; } = [];
+    public List<WeatherAlertInfo> Alerts { get; init; } = [];
     public WeatherAlertInfo Alert { get; init; } = new();
     public bool IsFromCache { get; init; }
     public string? StatusMessage { get; init; }
+    public bool AlertsAreCurrent { get; init; }
+    public DateTimeOffset? AlertsUpdatedAt { get; init; }
+    public string? AlertStatusMessage { get; init; }
 }
 
 public sealed class WeatherService
 {
+    public const string DataSourceName = "China Weather";
+    private const int CacheSchemaVersion = 3;
+    private readonly ChinaWeatherAlertService _alertService = new();
+
     private static readonly HttpClient HttpClient = new()
     {
         Timeout = TimeSpan.FromSeconds(10)
@@ -40,11 +49,39 @@ public sealed class WeatherService
         }
     }
 
-    public async Task<WeatherSnapshot> GetWeatherAsync(WeatherCityInfo city, bool forceRefresh)
+    public async Task<WeatherSnapshot> GetWeatherAsync(WeatherCityInfo city, bool forceRefresh,
+        CancellationToken cancellationToken = default)
+    {
+        Task<WeatherSnapshot> forecastTask = GetForecastAsync(city, forceRefresh, cancellationToken);
+        Task<WeatherAlertResult> alertTask = _alertService.GetAlertsAsync(city, forceRefresh, cancellationToken);
+        await Task.WhenAll(forecastTask, alertTask).ConfigureAwait(false);
+        WeatherSnapshot forecast = await forecastTask.ConfigureAwait(false);
+        WeatherAlertResult alerts = await alertTask.ConfigureAwait(false);
+        return new WeatherSnapshot
+        {
+            DataSource = forecast.DataSource, CityName = city.Name, CityCode = city.Code,
+            UpdatedAt = forecast.UpdatedAt, Days = forecast.Days,
+            IsFromCache = forecast.IsFromCache, StatusMessage = forecast.StatusMessage,
+            Alerts = alerts.Alerts, AlertsAreCurrent = alerts.IsCurrent,
+            AlertsUpdatedAt = alerts.UpdatedAt, AlertStatusMessage = alerts.StatusMessage,
+            Alert = alerts.Alerts.FirstOrDefault() ?? new WeatherAlertInfo
+            {
+                WeatherType = alerts.IsCurrent ? "No active alerts" : "Alerts unavailable",
+                Title = alerts.IsCurrent ? "No active alerts" : "Alerts unavailable",
+                LocationName = city.Name,
+                Description = alerts.StatusMessage ?? "No active warning in the China Weather alert list.",
+                LinkUrl = "https://www.weather.com.cn/alarm/"
+            }
+        };
+    }
+
+    private async Task<WeatherSnapshot> GetForecastAsync(WeatherCityInfo city, bool forceRefresh, CancellationToken cancellationToken)
     {
         WeatherCache? cache = await LoadCacheAsync().ConfigureAwait(false);
         if (!forceRefresh
             && cache is not null
+            && cache.SchemaVersion == CacheSchemaVersion
+            && cache.DataSource == DataSourceName
             && cache.Days.Count > 0
             && cache.CityCode == city.Code
             && DateTimeOffset.Now - cache.UpdatedAt < TimeSpan.FromHours(3))
@@ -54,14 +91,18 @@ public sealed class WeatherService
 
         try
         {
-            WeatherSnapshot snapshot = await FetchWeatherAsync(city).ConfigureAwait(false);
+            WeatherSnapshot snapshot = await FetchWeatherAsync(city, cancellationToken).ConfigureAwait(false);
             await SaveCacheAsync(snapshot).ConfigureAwait(false);
             return snapshot;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             Debug.WriteLine($"Weather request failed: {ex}");
             return cache is not null
+                && cache.SchemaVersion == CacheSchemaVersion
+                && cache.DataSource == DataSourceName
+                && cache.CityCode == city.Code
                 ? FromCache(cache, "Network failed. Showing cached weather.")
                 : CreateErrorSnapshot(city, "Unable to load weather. Check network or choose a city.");
         }
@@ -70,63 +111,80 @@ public sealed class WeatherService
     public async Task<WeatherSnapshot?> TryLoadCacheAsync()
     {
         WeatherCache? cache = await LoadCacheAsync().ConfigureAwait(false);
-        return cache is null || cache.Days.Count == 0 ? null : FromCache(cache, "Showing cached weather.");
+        return cache is null
+            || cache.SchemaVersion != CacheSchemaVersion
+            || cache.DataSource != DataSourceName
+            || cache.Days.Count == 0
+            ? null
+            : FromCache(cache, "Showing cached weather.");
     }
 
-    private static async Task<WeatherSnapshot> FetchWeatherAsync(WeatherCityInfo city)
+    private static async Task<WeatherSnapshot> FetchWeatherAsync(WeatherCityInfo city, CancellationToken cancellationToken)
     {
-        string url = "http://api.open-meteo.com/v1/forecast"
-            + $"?latitude={city.Latitude.ToString(CultureInfo.InvariantCulture)}"
-            + $"&longitude={city.Longitude.ToString(CultureInfo.InvariantCulture)}"
-            + "&daily=weather_code,temperature_2m_max,temperature_2m_min"
-            + "&hourly=relative_humidity_2m"
-            + "&current=relative_humidity_2m"
-            + "&timezone=auto"
-            + "&forecast_days=3";
+        string payload = await FetchChinaWeatherPayloadAsync(city, cancellationToken).ConfigureAwait(false);
+        JsonElement forecast = ExtractJsonObject(payload, "fc");
+        JsonElement current = ExtractJsonObject(payload, "dataSK");
+        List<WeatherDayInfo> days = CreateDaysFromChinaWeather(forecast, current);
 
-        using HttpRequestMessage request = new(HttpMethod.Get, url);
-        request.Headers.UserAgent.ParseAdd("TimeWidget/1.0");
-
-        using HttpResponseMessage response = await HttpClient.SendAsync(request).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        string payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-
-        using JsonDocument document = JsonDocument.Parse(payload);
-        JsonElement root = document.RootElement;
-        JsonElement daily = root.GetProperty("daily");
-
-        int currentHumidity = TryGetCurrentHumidity(root) ?? 0;
-        int[] hourlyHumidity = TryGetHourlyHumidity(root);
-        List<WeatherDayInfo> days = CreateDaysFromOpenMeteo(daily, hourlyHumidity, currentHumidity);
-        WeatherAlertInfo alert = await TryFetchChinaWeatherAlertAsync(city).ConfigureAwait(false);
+        if (days.Count == 0)
+        {
+            throw new InvalidDataException("China Weather returned no forecast days.");
+        }
 
         return new WeatherSnapshot
         {
+            DataSource = DataSourceName,
             CityName = city.Name,
             CityCode = city.Code,
             UpdatedAt = DateTimeOffset.Now,
             Days = days,
-            Alert = alert,
-            StatusMessage = "Weather updated."
+            StatusMessage = "Updated from China Weather."
         };
     }
 
-    private static List<WeatherDayInfo> CreateDaysFromOpenMeteo(JsonElement daily, int[] hourlyHumidity, int currentHumidity)
+    private static async Task<string> FetchChinaWeatherPayloadAsync(WeatherCityInfo city, CancellationToken cancellationToken)
     {
-        JsonElement times = daily.GetProperty("time");
-        JsonElement weatherCodes = daily.GetProperty("weather_code");
-        JsonElement highs = daily.GetProperty("temperature_2m_max");
-        JsonElement lows = daily.GetProperty("temperature_2m_min");
+        using HttpRequestMessage request = new(HttpMethod.Get, $"https://d1.weather.com.cn/weather_index/{city.Code}.html");
+        request.Headers.Referrer = new Uri($"http://www.weather.com.cn/weather1d/{city.Code}.shtml");
+        request.Headers.UserAgent.ParseAdd("Mozilla/5.0 TimeWidget/1.0");
+
+        using HttpResponseMessage response = await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static List<WeatherDayInfo> CreateDaysFromChinaWeather(JsonElement forecast, JsonElement current)
+    {
+        if (!forecast.TryGetProperty("f", out JsonElement forecastDays)
+            || forecastDays.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
 
         List<WeatherDayInfo> days = [];
-        int count = Math.Min(3, times.GetArrayLength());
+        int currentHumidity = ParsePercentage(GetOptionalString(current, "SD")) ?? 0;
+        int count = Math.Min(3, forecastDays.GetArrayLength());
 
         for (int i = 0; i < count; i++)
         {
-            DateTime date = DateTime.Parse(times[i].GetString() ?? DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
-            int code = weatherCodes[i].GetInt32();
-            int humidity = GetDailyHumidity(hourlyHumidity, i, currentHumidity);
-            WeatherCodeInfo weather = GetWeatherCodeInfo(code);
+            JsonElement item = forecastDays[i];
+            WeatherCodeInfo? daytime = GetChinaWeatherCodeInfo(GetOptionalString(item, "fa"));
+            WeatherCodeInfo? nighttime = GetChinaWeatherCodeInfo(GetOptionalString(item, "fb"));
+            WeatherCodeInfo primary = daytime ?? nighttime ?? new WeatherCodeInfo("Cloudy", "\u2601\uFE0F", 0);
+            WeatherCodeInfo iconSource = daytime is not null && nighttime is not null
+                ? (daytime.Value.Severity >= nighttime.Value.Severity ? daytime.Value : nighttime.Value)
+                : primary;
+            string weatherText = daytime is not null
+                && nighttime is not null
+                && !string.Equals(daytime.Value.Text, nighttime.Value.Text, StringComparison.Ordinal)
+                    ? $"{daytime.Value.Text} / {nighttime.Value.Text}"
+                    : primary.Text;
+
+            int high = TryParseInt(GetOptionalString(item, "fc"))
+                ?? TryParseInt(GetOptionalString(item, "fd"))
+                ?? 0;
+            int low = TryParseInt(GetOptionalString(item, "fd")) ?? high;
+            int humidity = GetForecastHumidity(item, currentHumidity);
 
             days.Add(new WeatherDayInfo
             {
@@ -134,12 +192,12 @@ public sealed class WeatherService
                 {
                     0 => "Today",
                     1 => "Tomorrow",
-                    _ => date.ToString("ddd", CultureInfo.InvariantCulture)
+                    _ => DateTime.Today.AddDays(i).ToString("ddd", CultureInfo.InvariantCulture)
                 },
-                WeatherText = weather.Text,
-                WeatherIcon = weather.Icon,
-                HighTemp = (int)Math.Round(highs[i].GetDouble()),
-                LowTemp = (int)Math.Round(lows[i].GetDouble()),
+                WeatherText = weatherText,
+                WeatherIcon = iconSource.Icon,
+                HighTemp = high,
+                LowTemp = low,
                 Humidity = humidity
             });
         }
@@ -147,141 +205,73 @@ public sealed class WeatherService
         return days;
     }
 
-    private static int? TryGetCurrentHumidity(JsonElement root)
+    private static int GetForecastHumidity(JsonElement item, int fallback)
     {
-        if (!root.TryGetProperty("current", out JsonElement current)
-            || !current.TryGetProperty("relative_humidity_2m", out JsonElement humidity)
-            || humidity.ValueKind != JsonValueKind.Number)
+        int? maximum = ParsePercentage(GetOptionalString(item, "fm"));
+        int? minimum = ParsePercentage(GetOptionalString(item, "fn"));
+        if (maximum is not null && minimum is not null)
+        {
+            return (int)Math.Round((maximum.Value + minimum.Value) / 2d);
+        }
+
+        return maximum ?? minimum ?? fallback;
+    }
+
+    private static int? ParsePercentage(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
         {
             return null;
         }
 
-        return humidity.GetInt32();
+        string normalized = text.Trim().TrimEnd('%');
+        return double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
+            ? Math.Clamp((int)Math.Round(value), 0, 100)
+            : null;
     }
 
-    private static int[] TryGetHourlyHumidity(JsonElement root)
+    private static WeatherCodeInfo? GetChinaWeatherCodeInfo(string? code)
     {
-        if (!root.TryGetProperty("hourly", out JsonElement hourly)
-            || !hourly.TryGetProperty("relative_humidity_2m", out JsonElement humidity)
-            || humidity.ValueKind != JsonValueKind.Array)
+        if (string.IsNullOrWhiteSpace(code))
         {
-            return [];
+            return null;
         }
 
-        return humidity.EnumerateArray()
-            .Where(value => value.ValueKind == JsonValueKind.Number)
-            .Select(value => value.GetInt32())
-            .ToArray();
-    }
-
-    private static int GetDailyHumidity(int[] hourlyHumidity, int dayIndex, int fallback)
-    {
-        int start = dayIndex * 24;
-        if (hourlyHumidity.Length <= start)
-        {
-            return fallback;
-        }
-
-        int count = Math.Min(24, hourlyHumidity.Length - start);
-        return (int)Math.Round(hourlyHumidity.Skip(start).Take(count).DefaultIfEmpty(fallback).Average());
-    }
-
-    private static WeatherCodeInfo GetWeatherCodeInfo(int code)
-    {
         return code switch
         {
-            0 => new WeatherCodeInfo("Sunny", "\u2600\uFE0F"),
-            1 or 2 => new WeatherCodeInfo("Partly Cloudy", "\u26C5"),
-            3 => new WeatherCodeInfo("Cloudy", "\u2601\uFE0F"),
-            45 or 48 => new WeatherCodeInfo("Fog", "\U0001F32B\uFE0F"),
-            51 or 53 or 55 or 56 or 57 => new WeatherCodeInfo("Drizzle", "\U0001F327\uFE0F"),
-            61 or 63 or 65 or 66 or 67 or 80 or 81 or 82 => new WeatherCodeInfo("Rain", "\U0001F327\uFE0F"),
-            71 or 73 or 75 or 77 or 85 or 86 => new WeatherCodeInfo("Snow", "\u2744\uFE0F"),
-            95 or 96 or 99 => new WeatherCodeInfo("Thunderstorm", "\u26C8\uFE0F"),
-            _ => new WeatherCodeInfo("Cloudy", "\u2601\uFE0F")
+            "00" => new WeatherCodeInfo("Sunny", "\u2600\uFE0F", 0),
+            "01" => new WeatherCodeInfo("Cloudy", "\u26C5", 1),
+            "02" => new WeatherCodeInfo("Overcast", "\u2601\uFE0F", 2),
+            "03" => new WeatherCodeInfo("Shower", "\U0001F326\uFE0F", 4),
+            "04" or "05" => new WeatherCodeInfo("Thunderstorm", "\u26C8\uFE0F", 7),
+            "06" or "19" => new WeatherCodeInfo("Sleet", "\U0001F328\uFE0F", 5),
+            "07" or "21" => new WeatherCodeInfo("Light Rain", "\U0001F327\uFE0F", 4),
+            "08" or "22" => new WeatherCodeInfo("Moderate Rain", "\U0001F327\uFE0F", 5),
+            "09" or "23" => new WeatherCodeInfo("Heavy Rain", "\U0001F327\uFE0F", 6),
+            "10" or "24" => new WeatherCodeInfo("Rainstorm", "\U0001F327\uFE0F", 7),
+            "11" or "25" => new WeatherCodeInfo("Heavy Rainstorm", "\U0001F327\uFE0F", 8),
+            "12" => new WeatherCodeInfo("Severe Rainstorm", "\U0001F327\uFE0F", 9),
+            "13" => new WeatherCodeInfo("Snow Flurry", "\U0001F328\uFE0F", 4),
+            "14" or "26" => new WeatherCodeInfo("Light Snow", "\u2744\uFE0F", 4),
+            "15" or "27" => new WeatherCodeInfo("Moderate Snow", "\u2744\uFE0F", 5),
+            "16" or "28" => new WeatherCodeInfo("Heavy Snow", "\u2744\uFE0F", 6),
+            "17" => new WeatherCodeInfo("Snowstorm", "\u2744\uFE0F", 8),
+            "18" => new WeatherCodeInfo("Fog", "\U0001F32B\uFE0F", 3),
+            "20" or "29" or "30" or "31" => new WeatherCodeInfo("Dust", "\U0001F32B\uFE0F", 5),
+            "49" or "53" or "54" or "55" or "56" or "57" or "58" => new WeatherCodeInfo("Haze", "\U0001F32B\uFE0F", 3),
+            "301" => new WeatherCodeInfo("Rain", "\U0001F327\uFE0F", 4),
+            "302" => new WeatherCodeInfo("Snow", "\u2744\uFE0F", 4),
+            _ => new WeatherCodeInfo("Cloudy", "\u2601\uFE0F", 0)
         };
     }
 
-    private static async Task<WeatherAlertInfo> TryFetchChinaWeatherAlertAsync(WeatherCityInfo city)
-    {
-        try
-        {
-            using HttpRequestMessage request = new(HttpMethod.Get, $"http://d1.weather.com.cn/weather_index/{city.Code}.html");
-            request.Headers.Referrer = new Uri($"http://www.weather.com.cn/weather1d/{city.Code}.shtml");
-            request.Headers.UserAgent.ParseAdd("Mozilla/5.0 TimeWidget/1.0");
-
-            using HttpResponseMessage response = await HttpClient.SendAsync(request).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            string payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            return ParseAlert(payload, city);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"China Weather alert request failed: {ex}");
-            return CreateNoAlert(city);
-        }
-    }
-
-    private static WeatherAlertInfo ParseAlert(string payload, WeatherCityInfo city)
-    {
-        try
-        {
-            Match alarmMatch = Regex.Match(payload, @"var\s+alarmDZ\d+\s*=\s*(\{.*?\});", RegexOptions.Singleline);
-            if (!alarmMatch.Success)
-            {
-                return CreateNoAlert(city);
-            }
-
-            using JsonDocument document = JsonDocument.Parse(alarmMatch.Groups[1].Value);
-            JsonElement root = document.RootElement;
-            JsonElement alertElement = root.TryGetProperty("w", out JsonElement warnings) && warnings.ValueKind == JsonValueKind.Array
-                ? warnings.EnumerateArray().FirstOrDefault()
-                : root;
-
-            if (alertElement.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
-            {
-                return CreateNoAlert(city);
-            }
-
-            string title = GetOptionalString(alertElement, "w2")
-                ?? GetOptionalString(alertElement, "title")
-                ?? "Weather Alert";
-            string description = GetOptionalString(alertElement, "w9")
-                ?? GetOptionalString(alertElement, "description")
-                ?? "Please check China Weather for details.";
-            AlertLevel level = ParseAlertLevel(title + description);
-
-            return new WeatherAlertInfo
-            {
-                Level = level,
-                Title = title,
-                Description = description,
-                LinkText = "China Weather",
-                LinkUrl = $"http://www.weather.com.cn/weather1d/{city.Code}.shtml"
-            };
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Weather alert parse failed: {ex}");
-            return CreateNoAlert(city);
-        }
-    }
-
-    private static WeatherAlertInfo CreateNoAlert(WeatherCityInfo city)
-    {
-        return new WeatherAlertInfo
-        {
-            Level = AlertLevel.None,
-            Title = "No weather alert",
-            Description = "No active weather warning.",
-            LinkText = "China Weather",
-            LinkUrl = $"http://www.weather.com.cn/weather1d/{city.Code}.shtml"
-        };
-    }
 
     private static JsonElement ExtractJsonObject(string payload, string variablePrefix)
     {
-        Match match = Regex.Match(payload, $@"var\s+{Regex.Escape(variablePrefix)}\d+\s*=\s*(\{{.*?\}});", RegexOptions.Singleline);
+        Match match = Regex.Match(
+            payload,
+            $@"var\s+{Regex.Escape(variablePrefix)}\d*\s*=\s*(\{{.*?\}})(?=\s*(?:;|var\s+|$))",
+            RegexOptions.Singleline);
         if (!match.Success)
         {
             throw new InvalidDataException($"Missing {variablePrefix} weather payload.");
@@ -301,30 +291,6 @@ public sealed class WeatherService
         return property.ValueKind == JsonValueKind.String ? property.GetString() : property.ToString();
     }
 
-    private static (int High, int Low) ParseTemperatureRange(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return (0, 0);
-        }
-
-        int[] values = Regex.Matches(text, @"-?\d+")
-            .Select(match => int.Parse(match.Value, CultureInfo.InvariantCulture))
-            .ToArray();
-
-        if (values.Length == 0)
-        {
-            return (0, 0);
-        }
-
-        if (values.Length == 1)
-        {
-            return (values[0], values[0]);
-        }
-
-        return (values.Max(), values.Min());
-    }
-
     private static int? TryParseInt(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -336,67 +302,8 @@ public sealed class WeatherService
         return match.Success ? int.Parse(match.Value, CultureInfo.InvariantCulture) : null;
     }
 
-    private static string GetWeatherIcon(string weatherText)
-    {
-        if (weatherText.Contains("\u96ea", StringComparison.Ordinal))
-        {
-            return "\u2744\uFE0F";
-        }
+    private readonly record struct WeatherCodeInfo(string Text, string Icon, int Severity);
 
-        if (weatherText.Contains("\u96e8", StringComparison.Ordinal))
-        {
-            return "\U0001F327\uFE0F";
-        }
-
-        if (weatherText.Contains("\u96f7", StringComparison.Ordinal))
-        {
-            return "\u26C8\uFE0F";
-        }
-
-        if (weatherText.Contains("\u9634", StringComparison.Ordinal)
-            || weatherText.Contains("Cloud", StringComparison.OrdinalIgnoreCase))
-        {
-            return "\u2601\uFE0F";
-        }
-
-        if (weatherText.Contains("\u4e91", StringComparison.Ordinal))
-        {
-            return "\u26C5";
-        }
-
-        return "\u2600\uFE0F";
-    }
-
-    private readonly record struct WeatherCodeInfo(string Text, string Icon);
-
-    private static AlertLevel ParseAlertLevel(string text)
-    {
-        if (text.Contains("\u7ea2", StringComparison.Ordinal)
-            || text.Contains("Red", StringComparison.OrdinalIgnoreCase))
-        {
-            return AlertLevel.Red;
-        }
-
-        if (text.Contains("\u6a59", StringComparison.Ordinal)
-            || text.Contains("Orange", StringComparison.OrdinalIgnoreCase))
-        {
-            return AlertLevel.Orange;
-        }
-
-        if (text.Contains("\u9ec4", StringComparison.Ordinal)
-            || text.Contains("Yellow", StringComparison.OrdinalIgnoreCase))
-        {
-            return AlertLevel.Yellow;
-        }
-
-        if (text.Contains("\u84dd", StringComparison.Ordinal)
-            || text.Contains("Blue", StringComparison.OrdinalIgnoreCase))
-        {
-            return AlertLevel.Blue;
-        }
-
-        return AlertLevel.None;
-    }
 
     private static async Task<WeatherCache?> LoadCacheAsync()
     {
@@ -434,10 +341,13 @@ public sealed class WeatherService
 
                 WeatherCache cache = new()
                 {
+                    SchemaVersion = CacheSchemaVersion,
+                    DataSource = DataSourceName,
                     UpdatedAt = snapshot.UpdatedAt,
                     CityName = snapshot.CityName,
                     CityCode = snapshot.CityCode,
                     Days = snapshot.Days,
+                    Alerts = snapshot.Alerts,
                     Alert = snapshot.Alert
                 };
 
@@ -452,13 +362,21 @@ public sealed class WeatherService
 
     private static WeatherSnapshot FromCache(WeatherCache cache, string message)
     {
+        List<WeatherAlertInfo> alerts = cache.Alerts.Count > 0
+            ? cache.Alerts
+            : cache.Alert.Level != AlertLevel.None
+                ? [cache.Alert]
+                : [];
+
         return new WeatherSnapshot
         {
+            DataSource = cache.DataSource,
             CityName = cache.CityName,
             CityCode = cache.CityCode,
             UpdatedAt = cache.UpdatedAt,
             Days = cache.Days,
-            Alert = cache.Alert,
+            Alerts = alerts,
+            Alert = alerts.FirstOrDefault() ?? cache.Alert,
             IsFromCache = true,
             StatusMessage = message
         };
@@ -468,13 +386,17 @@ public sealed class WeatherService
     {
         return new WeatherSnapshot
         {
+            DataSource = DataSourceName,
             CityName = city.Name,
             CityCode = city.Code,
             UpdatedAt = DateTimeOffset.Now,
             Days = [],
+            Alerts = [],
             Alert = new WeatherAlertInfo
             {
                 Level = AlertLevel.None,
+                WeatherType = "Weather unavailable",
+                LocationName = city.Name,
                 Title = "Weather unavailable",
                 Description = message,
                 LinkText = "China Weather",

@@ -1,0 +1,19 @@
+## Build output
+bin/
+obj/
+publish/
+dist/
+*.user
+*.suo
+*.log
+
+## Local cache / runtime config
+weather_cache.json
+*.cache
+
+## OS files
+Thumbs.db
+Desktop.ini
+
+## Installer/package output
+*.zip

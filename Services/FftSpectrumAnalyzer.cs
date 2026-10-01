@@ -5,15 +5,21 @@ namespace TimeWidget.Services;
 
 public sealed class FftSpectrumAnalyzer
 {
-    public const int FftSize = 2048;
+    public const int FftSize = 4096;
     public const int BandCount = 32;
-    private const int FftPower = 11;
-    private const double MinFrequency = 40;
+    private const int FftPower = 12;
+    public const double MinFrequency = 30;
+    public const double MaxFrequency = 8000;
     private const double Gain = 72;
+    private readonly Complex[] _fftBuffer = new Complex[FftSize];
+    private readonly double[] _window = CreateHannWindow();
+    private readonly int[] _startBins = new int[BandCount];
+    private readonly int[] _endBins = new int[BandCount];
+    private int _mappedSampleRate;
 
     public double[] Analyze(float[] samples, int sampleRate)
     {
-        if (samples.Length < FftSize || sampleRate <= 0)
+        if (samples.Length < FftSize || sampleRate / 2.0 <= MinFrequency)
         {
             return new double[BandCount];
         }
@@ -22,25 +28,23 @@ public sealed class FftSpectrumAnalyzer
 
         try
         {
-            Complex[] fftBuffer = new Complex[FftSize];
+            if (_mappedSampleRate != sampleRate)
+            {
+                UpdateBandMapping(sampleRate);
+            }
 
             for (int i = 0; i < FftSize; i++)
             {
-                double window = 0.5 * (1 - Math.Cos(2 * Math.PI * i / (FftSize - 1)));
-                fftBuffer[i].X = (float)(samples[i] * window);
-                fftBuffer[i].Y = 0;
+                _fftBuffer[i].X = float.IsFinite(samples[i]) ? (float)(samples[i] * _window[i]) : 0;
+                _fftBuffer[i].Y = 0;
             }
 
-            FastFourierTransform.FFT(true, FftPower, fftBuffer);
-            double maxFrequency = Math.Min(16000, sampleRate / 2.0);
+            FastFourierTransform.FFT(true, FftPower, _fftBuffer);
 
             for (int band = 0; band < BandCount; band++)
             {
-                double startFrequency = GetLogFrequency(band, maxFrequency);
-                double endFrequency = GetLogFrequency(band + 1, maxFrequency);
-                int startBin = Math.Max(1, FrequencyToBin(startFrequency, sampleRate));
-                int endBin = Math.Max(startBin + 1, FrequencyToBin(endFrequency, sampleRate));
-                endBin = Math.Min(endBin, FftSize / 2);
+                int startBin = _startBins[band];
+                int endBin = _endBins[band];
 
                 double peak = 0;
                 double sum = 0;
@@ -48,8 +52,8 @@ public sealed class FftSpectrumAnalyzer
 
                 for (int bin = startBin; bin < endBin; bin++)
                 {
-                    double real = fftBuffer[bin].X;
-                    double imaginary = fftBuffer[bin].Y;
+                    double real = _fftBuffer[bin].X;
+                    double imaginary = _fftBuffer[bin].Y;
                     double magnitude = Math.Sqrt(real * real + imaginary * imaginary);
                     peak = Math.Max(peak, magnitude);
                     sum += magnitude;
@@ -68,6 +72,31 @@ public sealed class FftSpectrumAnalyzer
         }
 
         return bands;
+    }
+
+    private static double[] CreateHannWindow()
+    {
+        double[] window = new double[FftSize];
+        for (int i = 0; i < window.Length; i++)
+        {
+            window[i] = 0.5 * (1 - Math.Cos(2 * Math.PI * i / (FftSize - 1)));
+        }
+        return window;
+    }
+
+    private void UpdateBandMapping(int sampleRate)
+    {
+        double maxFrequency = Math.Min(MaxFrequency, sampleRate / 2.0);
+        int firstBin = Math.Max(1, (int)Math.Ceiling(MinFrequency * FftSize / sampleRate));
+        int lastBin = Math.Min(FftSize / 2, (int)Math.Floor(maxFrequency * FftSize / sampleRate));
+        for (int band = 0; band < BandCount; band++)
+        {
+            int start = Math.Clamp(FrequencyToBin(GetLogFrequency(band, maxFrequency), sampleRate), firstBin, lastBin);
+            int end = Math.Max(start + 1, FrequencyToBin(GetLogFrequency(band + 1, maxFrequency), sampleRate));
+            _startBins[band] = start;
+            _endBins[band] = band == BandCount - 1 ? lastBin + 1 : Math.Min(end, lastBin + 1);
+        }
+        _mappedSampleRate = sampleRate;
     }
 
     private static double GetLogFrequency(int bandIndex, double maxFrequency)

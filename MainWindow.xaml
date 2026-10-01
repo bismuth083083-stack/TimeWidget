@@ -51,6 +51,12 @@
                       Click="OpenQuickSettingsMenuItem_Click" />
             <MenuItem Header="Open Performance Widget"
                       Click="OpenPerformanceMenuItem_Click" />
+            <MenuItem Header="Open Network Traffic"
+                      Click="OpenNetworkTrafficMenuItem_Click" />
+            <MenuItem Header="Open Audio Control"
+                      Click="OpenAudioControlMenuItem_Click" />
+            <MenuItem Header="Open Finance Widget"
+                      Click="OpenFinanceMenuItem_Click" />
             <Separator />
             <MenuItem Header="&#x9000;&#x51FA;"
                       Click="ExitMenuItem_Click" />
