@@ -27,6 +27,26 @@ Open any widget from the tray icon (double-click opens the clock):
 Widgets support drag-to-move, window snapping, and remember their position and
 appearance between runs.
 
+## Album art for streaming players
+
+The Media widget normally uses the artwork a player publishes through Windows'
+System Media Transport Controls. Some players only publish artwork for files in
+their own library, so streaming tracks can come through without a cover.
+
+ECHO NEXT is one such player: it drives SMTC from a separate helper process and
+derives the cover from the *local library* cover id, so streaming tracks (NetEase
+Cloud Music, and similar sources) reach SMTC with no artwork at all.
+
+TimeWidget handles this by, for ECHO, also querying ECHO's local
+wallpaper-engine integration endpoint (`http://127.0.0.1:47668/snapshot`),
+reading the current track's `coverUrl`, and fetching the image directly. NetEase
+URLs are requested at 500×500 instead of the low-resolution thumbnail the player
+requested. When ECHO is not running, or the endpoint is unavailable, the widget
+simply falls back to the player's own artwork.
+
+Nothing is sent anywhere: the only external requests are to the cover URL the
+player itself advertised.
+
 ## Requirements
 
 - Windows 10 version 1809 (build 17763) or newer
@@ -89,6 +109,7 @@ TimeWidget/
   Controls/                  custom WPF controls (spectrum bars, weather icon, marquee)
   Models/                    settings and data records + JSON stores
   Services/                  weather, media, audio, performance, finance, system control
+                             (CoverArtService resolves now-playing artwork)
   Assets/                    application icon
   build.ps1                  build & packaging script
 ```

@@ -23,8 +23,12 @@ public partial class MediaWidgetWindow : Window
     private readonly FftSpectrumAnalyzer _spectrumAnalyzer = new();
     private readonly SpectrumSmoother _spectrumSmoother = new();
     private readonly MediaProgressTracker _progressTracker = new();
+    private readonly CoverArtService _coverArtService = new();
     private readonly SemaphoreSlim _mediaRefreshGate = new(1, 1);
     private readonly SemaphoreSlim _seekGate = new(1, 1);
+
+    /// <summary>Media keys with a cover fetch in flight, so a key is never resolved twice.</summary>
+    private readonly HashSet<string> _coverFetchInFlight = new(StringComparer.Ordinal);
     private readonly float[] _fftSamples = new float[FftSpectrumAnalyzer.FftSize];
     private GlobalSystemMediaTransportControlsSessionManager? _sessionManager;
     private GlobalSystemMediaTransportControlsSession? _currentSession;
@@ -122,6 +126,7 @@ public partial class MediaWidgetWindow : Window
         _audioSpectrumService.CaptureUnavailable -= AudioSpectrumService_CaptureUnavailable;
         _audioSpectrumService.CaptureAvailable -= AudioSpectrumService_CaptureAvailable;
         _audioSpectrumService.Dispose();
+        _coverArtService.Dispose();
     }
 
     private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -359,10 +364,15 @@ public partial class MediaWidgetWindow : Window
                 ClearThumbnail();
             }
 
-            if (!string.Equals(_loadedThumbnailMediaKey, mediaKey, StringComparison.Ordinal)
-                && await TryUpdateThumbnailAsync(properties.Thumbnail, mediaKey, generation))
+            if (!string.Equals(_loadedThumbnailMediaKey, mediaKey, StringComparison.Ordinal))
             {
-                _loadedThumbnailMediaKey = mediaKey;
+                // Cover resolution can hit the network (ECHO streaming sources), so it must
+                // not run inline on the UI thread. Never resolve the same key twice at once.
+                if (!_coverFetchInFlight.Contains(mediaKey))
+                {
+                    _coverFetchInFlight.Add(mediaKey);
+                    _ = ApplyCoverArtAsync(properties.Thumbnail, mediaKey, source, generation);
+                }
             }
         }
         catch (Exception ex)
@@ -379,35 +389,51 @@ public partial class MediaWidgetWindow : Window
         }
     }
 
-    private async Task<bool> TryUpdateThumbnailAsync(
+    /// <summary>
+    /// Resolves artwork off the UI thread, then applies it back on the dispatcher.
+    /// ECHO's streaming cover path involves local HTTP + a CDN download, so this must never
+    /// block the refresh tick.
+    /// </summary>
+    private async Task ApplyCoverArtAsync(
         IRandomAccessStreamReference? thumbnail,
         string mediaKey,
+        string sourceAumid,
         int generation)
     {
-        if (thumbnail is null)
-        {
-            return false;
-        }
-
+        BitmapSource? image;
         try
         {
-            using IRandomAccessStreamWithContentType randomAccessStream = await thumbnail.OpenReadAsync();
-            using Stream stream = randomAccessStream.AsStreamForRead();
+            image = await Task.Run(() => _coverArtService.TryResolve(thumbnail, mediaKey, sourceAumid));
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Album artwork resolution failed: {ex.Message}");
+            image = null;
+        }
+        finally
+        {
+            _coverFetchInFlight.Remove(mediaKey);
+        }
 
-            BitmapImage image = new();
-            image.BeginInit();
-            image.CacheOption = BitmapCacheOption.OnLoad;
-            image.StreamSource = stream;
-            image.EndInit();
-            image.Freeze();
+        if (image is null)
+        {
+            return;
+        }
 
-            if (_isClosed
-                || generation != _sessionGeneration
-                || !string.Equals(_lastMediaKey, mediaKey, StringComparison.Ordinal))
-            {
-                return false;
-            }
+        if (_isClosed
+            || generation != _sessionGeneration
+            || !string.Equals(_lastMediaKey, mediaKey, StringComparison.Ordinal))
+        {
+            return;
+        }
 
+        ApplyCoverArtImage(image, mediaKey);
+    }
+
+    private void ApplyCoverArtImage(BitmapSource image, string mediaKey)
+    {
+        try
+        {
             AlbumArtShape.Fill = new ImageBrush(image)
             {
                 Stretch = Stretch.UniformToFill
@@ -425,18 +451,19 @@ public partial class MediaWidgetWindow : Window
             albumAccent.Freeze();
             ApplyAlbumAccent(albumAccent);
             AlbumArtPlaceholder.Visibility = Visibility.Collapsed;
-            return true;
+            _loadedThumbnailMediaKey = mediaKey;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Album thumbnail refresh failed: {ex.Message}");
-            return false;
+            System.Diagnostics.Debug.WriteLine($"Album artwork apply failed: {ex.Message}");
         }
     }
 
     private void ClearThumbnail()
     {
         _loadedThumbnailMediaKey = null;
+        _coverFetchInFlight.Clear();
+        _coverArtService.Reset();
         AlbumArtShape.Fill = new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF));
         AlbumBlurBackground.Fill = null;
         AlbumBlurBackground.Visibility = Visibility.Collapsed;
