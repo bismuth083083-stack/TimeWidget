@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
 namespace TimeWidget.Services;
@@ -11,6 +12,8 @@ public sealed class AudioSpectrumService : IDisposable
     private int _writeIndex;
     private int _sampleCount;
     private WasapiLoopbackCapture? _capture;
+    private string? _captureDeviceId;
+    private long _lastDeviceCheckTimestamp;
     private bool _isDisposed;
     private bool _isRestarting;
     private bool _isStoppingCapture;
@@ -30,6 +33,7 @@ public sealed class AudioSpectrumService : IDisposable
         try
         {
             _capture = new WasapiLoopbackCapture();
+            _captureDeviceId = TryGetDefaultDeviceId();
             SampleRate = _capture.WaveFormat.SampleRate;
             _capture.DataAvailable += Capture_DataAvailable;
             _capture.RecordingStopped += Capture_RecordingStopped;
@@ -54,6 +58,58 @@ public sealed class AudioSpectrumService : IDisposable
         DisposeCapture();
         ClearBuffer();
         Start();
+    }
+
+    /// <summary>
+    /// Re-binds the capture to the current default render endpoint when the user
+    /// switched output devices. A loopback bound to a device that no longer
+    /// carries audio silently delivers zeros forever, which shows up as a flat
+    /// spectrum that never recovers.
+    /// </summary>
+    public void AssureDefaultDevice()
+    {
+        if (_isDisposed || _capture is null)
+        {
+            return;
+        }
+
+        long now = Stopwatch.GetTimestamp();
+        if (now - _lastDeviceCheckTimestamp < Stopwatch.Frequency / 2)
+        {
+            return;
+        }
+
+        _lastDeviceCheckTimestamp = now;
+
+        try
+        {
+            string? currentId = TryGetDefaultDeviceId();
+            if (currentId is not null
+                && _captureDeviceId is not null
+                && !string.Equals(currentId, _captureDeviceId, StringComparison.Ordinal))
+            {
+                Debug.WriteLine("Audio capture device changed; rebinding loopback.");
+                Restart();
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Audio capture device check failed: {ex.Message}");
+        }
+    }
+
+    private static string? TryGetDefaultDeviceId()
+    {
+        try
+        {
+            using MMDeviceEnumerator enumerator = new MMDeviceEnumerator();
+            MMDevice device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            return device.ID;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public bool TryGetLatestSamples(int count, float[] destination)
@@ -268,6 +324,7 @@ public sealed class AudioSpectrumService : IDisposable
             _isStoppingCapture = false;
             _capture.Dispose();
             _capture = null;
+            _captureDeviceId = null;
         }
     }
 }

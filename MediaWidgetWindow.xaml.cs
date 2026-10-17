@@ -41,6 +41,7 @@ public partial class MediaWidgetWindow : Window
     private string? _loadedThumbnailMediaKey;
     private int _sessionGeneration;
     private bool _currentSessionCanSeek;
+    private bool _isPlayingNow;
     private bool _isSeekDragging;
     private bool _isSeekCommitPending;
     private DateTime _lastSeekRequestTime = DateTime.MinValue;
@@ -616,6 +617,8 @@ public partial class MediaWidgetWindow : Window
     private void UpdatePlaybackUi(GlobalSystemMediaTransportControlsSessionPlaybackInfo playbackInfo)
     {
         PlaybackStatusText.Text = GetPlaybackStatusText(playbackInfo.PlaybackStatus);
+        _isPlayingNow = playbackInfo.PlaybackStatus
+            == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
         PlayPauseButton.Content = playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing
             ? "\uE769"
             : "\uE768";
@@ -650,6 +653,19 @@ public partial class MediaWidgetWindow : Window
 
         if (_isSeekDragging || _isSeekCommitPending)
         {
+            return;
+        }
+
+        if (progress.Mode == MediaProgressMode.ElapsedOnly)
+        {
+            // The player exposes no duration at all (e.g. the official NetEase
+            // Cloud Music client). Show a live elapsed counter plus a pulsing bar
+            // so the widget still communicates progress.
+            PositionText.Text = FormatMediaTime(progress.Position);
+            DurationText.Text = "--:--";
+            MediaProgressBar.Opacity = 1;
+            MediaProgressBar.IsIndeterminate = true;
+            UpdateSeekInteractionState();
             return;
         }
 
@@ -914,7 +930,25 @@ public partial class MediaWidgetWindow : Window
         try
         {
             bool hasSamples = _audioSpectrumService.TryGetLatestSamples(FftSpectrumAnalyzer.FftSize, _fftSamples);
-            if (hasSamples)
+            double[] spectrum = hasSamples
+                ? _spectrumAnalyzer.Analyze(_fftSamples, _audioSpectrumService.SampleRate)
+                : Array.Empty<double>();
+
+            // "Has samples" is not the same as "has audible audio": a loopback
+            // bound to a device that no longer carries sound keeps delivering
+            // zeros forever. Treat a flat spectrum during playback as stale so the
+            // capture can be rebound instead of staying dead permanently.
+            bool audible = false;
+            for (int i = 0; i < spectrum.Length; i++)
+            {
+                if (spectrum[i] > 0.02)
+                {
+                    audible = true;
+                    break;
+                }
+            }
+
+            if (audible)
             {
                 _lastSpectrumSampleTime = DateTime.UtcNow;
             }
@@ -923,10 +957,8 @@ public partial class MediaWidgetWindow : Window
                 RestartSpectrumCaptureIfStale();
             }
 
-            double[] spectrum = hasSamples
-                ? _spectrumAnalyzer.Analyze(_fftSamples, _audioSpectrumService.SampleRate)
-                : Array.Empty<double>();
             _spectrumSmoother.SetTarget(spectrum);
+            _audioSpectrumService.AssureDefaultDevice();
         }
         catch (Exception ex)
         {
@@ -1114,6 +1146,13 @@ public partial class MediaWidgetWindow : Window
 
     private void RestartSpectrumCaptureIfStale()
     {
+        // Only rebind while something is supposed to be audible; silence during a
+        // pause is expected and must not trigger capture churn.
+        if (!_isPlayingNow)
+        {
+            return;
+        }
+
         DateTime now = DateTime.UtcNow;
         if (_lastSpectrumSampleTime == DateTime.MinValue)
         {

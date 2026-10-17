@@ -46,7 +46,15 @@ public static class SettingsStore
         }
 
         string json = JsonSerializer.Serialize(settings, JsonOptions);
-        File.WriteAllText(SettingsPath, json);
+        try
+        {
+            File.WriteAllText(SettingsPath, json);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A failed settings write (another instance holding the file, roaming profile
+            // locked down, etc.) must never take a widget window down with it.
+        }
     }
 
     public static void Update(Action<WidgetSettings> updateSettings)

@@ -6,6 +6,13 @@ internal enum MediaProgressMode
 {
     Normal,
     Estimating,
+    /// <summary>
+    /// The player is playing but exposes no duration at all (for example the
+    /// official NetEase Cloud Music client, which publishes an empty SMTC
+    /// timeline with IsPlaybackPositionEnabled = false). The widget can still
+    /// show live elapsed playback time in this mode.
+    /// </summary>
+    ElapsedOnly,
     Unavailable
 }
 
@@ -38,6 +45,9 @@ internal sealed class MediaProgressTracker
     private bool _isPlaying;
     private double _playbackRate = 1;
     private MediaProgressMode _mode = MediaProgressMode.Unavailable;
+    private bool _hasElapsedClock;
+    private TimeSpan _elapsedBase;
+    private long _elapsedRunStart;
 
     public void SetMedia(string mediaKey)
     {
@@ -63,6 +73,9 @@ internal sealed class MediaProgressTracker
         _isPlaying = false;
         _playbackRate = 1;
         _mode = MediaProgressMode.Unavailable;
+        _hasElapsedClock = false;
+        _elapsedBase = TimeSpan.Zero;
+        _elapsedRunStart = 0;
     }
 
     public MediaProgressSnapshot Synchronize(
@@ -121,6 +134,7 @@ internal sealed class MediaProgressTracker
             _lastSourcePosition = sourcePosition;
             _lastSourceUpdatedTime = sample.LastUpdatedTime;
             _hasSourcePosition = true;
+            _hasElapsedClock = false;
         }
         else if (_hasDuration)
         {
@@ -131,8 +145,11 @@ internal sealed class MediaProgressTracker
         }
         else
         {
+            // The player never published a duration. Keep a local playback clock so
+            // the widget can still show elapsed time instead of a frozen 00:00.
+            AccrueElapsed(now);
             _positionAnchor = TimeSpan.Zero;
-            _mode = MediaProgressMode.Unavailable;
+            _mode = _hasElapsedClock ? MediaProgressMode.ElapsedOnly : MediaProgressMode.Unavailable;
         }
 
         _anchorTimestamp = now;
@@ -147,6 +164,14 @@ internal sealed class MediaProgressTracker
 
     private MediaProgressSnapshot GetSnapshot(long now)
     {
+        if (_mode == MediaProgressMode.ElapsedOnly && _hasElapsedClock)
+        {
+            return new MediaProgressSnapshot(
+                GetElapsedPosition(now),
+                TimeSpan.Zero,
+                MediaProgressMode.ElapsedOnly);
+        }
+
         if (!_hasDuration)
         {
             return new MediaProgressSnapshot(TimeSpan.Zero, TimeSpan.Zero, MediaProgressMode.Unavailable);
@@ -156,6 +181,38 @@ internal sealed class MediaProgressTracker
             Clamp(GetEstimatedPosition(now), TimeSpan.Zero, _duration),
             _duration,
             _mode);
+    }
+
+    /// <summary>
+    /// Advances the fallback playback clock. Called before <see cref="_isPlaying"/>
+    /// is updated, so it reflects the previous sample's playback state.
+    /// </summary>
+    private void AccrueElapsed(long now)
+    {
+        // A media change resets the clock; the first observation of playback starts it.
+        if (_elapsedRunStart == 0)
+        {
+            _elapsedRunStart = now;
+        }
+
+        if (_isPlaying)
+        {
+            _elapsedBase = GetElapsedPosition(now);
+            _hasElapsedClock = true;
+        }
+
+        _elapsedRunStart = now;
+    }
+
+    private TimeSpan GetElapsedPosition(long now)
+    {
+        if (!_isPlaying || _elapsedRunStart == 0)
+        {
+            return _elapsedBase;
+        }
+
+        double seconds = (now - _elapsedRunStart) / (double)Stopwatch.Frequency;
+        return _elapsedBase + TimeSpan.FromSeconds(Math.Max(0, seconds) * _playbackRate);
     }
 
     private TimeSpan GetEstimatedPosition(long now)

@@ -47,6 +47,34 @@ simply falls back to the player's own artwork.
 Nothing is sent anywhere: the only external requests are to the cover URL the
 player itself advertised.
 
+## Spectrum and playback progress
+
+The spectrum bars are driven by a WASAPI loopback capture of the default output
+device, so they follow whatever is actually audible — not the media session's
+metadata. Two things made the bars look dead in practice:
+
+* A fixed FFT gain. Music played at a normal listening level lands around
+  −35 dBFS, far below what a fixed gain turns into visible bars. The analyzer now
+  measures the peak/RMS of each 4096-sample block and applies a smoothed
+  automatic gain (fast attack, slow release, capped at 24×) with a silence gate,
+  so quiet playback renders the same shape as loud playback while real silence
+  still produces an empty spectrum.
+* A stale capture device. If the default output device changes (headphones
+  plugged in, a new DAC selected), a loopback stream bound to the old endpoint
+  keeps delivering zeroed buffers forever. The widget now compares the current
+  default endpoint against the one it is capturing and rebinds when they differ,
+  and it also treats "samples arriving but all flat while playing" as a stale
+  capture.
+
+Playback progress has a similar split. Players that publish a real SMTC timeline
+(Windows Media Player, most browsers, local files) get a normal seekable
+progress bar. The official NetEase Cloud Music client publishes *no* timeline at
+all — `EndTime`, `MinSeekTime`, `MaxSeekTime` and `Position` are all zero and
+`IsPlaybackPositionEnabled` is false — so there is no duration to divide by.
+For those players the widget shows the elapsed playback time and an animated
+indeterminate bar instead of a frozen `00:00 / --:--`. Seeking stays disabled
+because the player does not accept position changes.
+
 ## Requirements
 
 - Windows 10 version 1809 (build 17763) or newer
