@@ -11,10 +11,18 @@ public sealed class FolderFileItem
     public required string IconGlyph { get; init; }
     public required DateTime LastWriteTime { get; init; }
     public required long SizeInBytes { get; init; }
+    public bool IsDirectory { get; init; }
 
     public string ModifiedText => LastWriteTime.ToString("MM/dd HH:mm", CultureInfo.InvariantCulture);
 
-    public string SizeText => FormatFileSize(SizeInBytes);
+    public string SizeText => IsDirectory ? "Folder" : FormatFileSize(SizeInBytes);
+
+    public static FolderFileItem FromDirectoryInfo(DirectoryInfo directory) => new()
+    {
+        FullPath = directory.FullName, FileName = directory.Name, FileType = "Folder",
+        IconGlyph = "\uE8B7", LastWriteTime = directory.LastWriteTime,
+        SizeInBytes = 0, IsDirectory = true
+    };
 
     public static FolderFileItem FromFileInfo(FileInfo file)
     {

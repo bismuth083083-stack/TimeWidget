@@ -15,6 +15,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        WidgetAppearanceService.Initialize();
         if (!string.Equals(
                 Environment.GetEnvironmentVariable("TIMEWIDGET_SKIP_STARTUP_REGISTRATION"),
                 "1",

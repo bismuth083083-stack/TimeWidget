@@ -30,6 +30,16 @@
                       Header="&#x5141;&#x8BB8;&#x8C03;&#x6574;&#x5927;&#x5C0F;"
                       IsCheckable="True"
                       Click="ResizeMenuItem_Click" />
+            <MenuItem x:Name="SortMenuItem" Header="Sort by">
+                <MenuItem Header="Modified (newest first)" Tag="ModifiedDescending" IsCheckable="True" Click="SortMenuItem_Click" />
+                <MenuItem Header="Modified (oldest first)" Tag="ModifiedAscending" IsCheckable="True" Click="SortMenuItem_Click" />
+                <MenuItem Header="Name (A-Z)" Tag="NameAscending" IsCheckable="True" Click="SortMenuItem_Click" />
+                <MenuItem Header="Name (Z-A)" Tag="NameDescending" IsCheckable="True" Click="SortMenuItem_Click" />
+                <MenuItem Header="Size (largest first)" Tag="SizeDescending" IsCheckable="True" Click="SortMenuItem_Click" />
+                <MenuItem Header="Size (smallest first)" Tag="SizeAscending" IsCheckable="True" Click="SortMenuItem_Click" />
+                <MenuItem Header="Type" Tag="TypeAscending" IsCheckable="True" Click="SortMenuItem_Click" />
+            </MenuItem>
+            <MenuItem x:Name="ShowFoldersMenuItem" Header="Show folders" IsCheckable="True" IsChecked="True" Click="ShowFoldersMenuItem_Click" />
         </ContextMenu>
     </Window.ContextMenu>
 
@@ -175,14 +185,17 @@
                             Orientation="Horizontal"
                             VerticalAlignment="Top"
                             HorizontalAlignment="Right">
-                    <Button Content="Choose"
+                    <Button x:Name="UpFolderButton" Content="&#xE74A;" FontFamily="Segoe MDL2 Assets"
+                            ToolTip="Parent folder" Margin="0,0,6,0" Width="28" Height="28" Padding="0"
+                            Style="{StaticResource ToolButtonStyle}" Click="UpFolderButton_Click" />
+                    <Button Content="&#xE8B7;" FontFamily="Segoe MDL2 Assets" Width="28" Height="28" Padding="0" ToolTip="Choose folder"
                             Style="{StaticResource ToolButtonStyle}"
                             Click="ChooseFolderButton_Click" />
-                    <Button Content="Refresh"
+                    <Button Content="&#xE72C;" FontFamily="Segoe MDL2 Assets" Width="28" Height="28" Padding="0" ToolTip="Refresh"
                             Margin="8,0,0,0"
                             Style="{StaticResource ToolButtonStyle}"
                             Click="RefreshButton_Click" />
-                    <Button Content="Exit"
+                    <Button Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" Width="28" Height="28" Padding="0" ToolTip="Close"
                             Margin="8,0,0,0"
                             Style="{StaticResource ToolButtonStyle}"
                             Click="ExitButton_Click" />
@@ -205,6 +218,7 @@
                          BorderThickness="0"
                          ItemsSource="{Binding Files}"
                          MouseDoubleClick="FilesListBox_MouseDoubleClick"
+                         PreviewMouseLeftButtonUp="FilesListBox_PreviewMouseLeftButtonUp"
                          PreviewMouseRightButtonDown="FilesListBox_PreviewMouseRightButtonDown"
                          Padding="0"
                          Visibility="Collapsed"
