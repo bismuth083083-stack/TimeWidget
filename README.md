@@ -27,10 +27,10 @@ Open any widget from the tray icon (double-click opens the clock):
 Widgets support drag-to-move, window snapping, and remember their position and
 appearance between runs.
 
-## Frosted backgrounds and folder navigation (v1.4)
+## Frosted backgrounds and folder navigation
 
 Every desktop widget except Media has a **Background opacity** submenu in its
-right-click menu. The default is 70% dark tint (higher means more opaque).
+right-click menu. The default is 50% dark tint (higher means more opaque).
 Text and button opacity do not change. Preferences are saved per widget type.
 The background beneath the tint is always a Gaussian-blurred wallpaper image,
 including at 0% and 100%. This is a wallpaper-backed frosted effect, not live
@@ -38,6 +38,11 @@ capture of other application windows. The wallpaper is decoded and blurred once
 on a background STA thread; moving/resizing only updates the cached crop after
 a debounce. Restart after changing wallpaper to reload it. If wallpaper cannot
 be read, an opaque dark background is used rather than unblurred transparency.
+
+Enable **Live background blur** in the same menu to blur the windows behind
+the widget in real time through Windows desktop composition. This option is
+off by default and saved per widget type. The outer border is highlighted
+from the upper right and fades toward the lower left.
 
 Files now lists the current directory's files and folders without recursion.
 Folders appear first. Use **Sort by** for modified time, name, size or type;

@@ -3,6 +3,7 @@ namespace TimeWidget.Models;
 public sealed class WidgetSettings
 {
     public Dictionary<string, double> BackgroundOpacities { get; set; } = new();
+    public HashSet<string> LiveBlurWidgets { get; set; } = new();
     public string FolderSortOrder { get; set; } = "ModifiedDescending";
     public bool FolderShowDirectories { get; set; } = true;
     public double? Left { get; set; }

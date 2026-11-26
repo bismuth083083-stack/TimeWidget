@@ -17,6 +17,7 @@ namespace TimeWidget.Services;
 public static class WidgetAppearanceService
 {
     private static readonly Lazy<Task<BitmapSource?>> Wallpaper = new(LoadBlurredWallpaperAsync);
+    private static readonly Brush DirectionalBorder = CreateDirectionalBorder();
     private static bool _initialized;
 
     public static void Initialize()
@@ -31,9 +32,28 @@ public static class WidgetAppearanceService
     {
         if (sender is not Window window || !ReferenceEquals(e.OriginalSource, window)) return;
         string key = window.GetType().Name;
-        if (key == nameof(MediaWidgetWindow)
-            || (key != nameof(MainWindow) && !key.EndsWith("WidgetWindow", StringComparison.Ordinal))) return;
-        if (window.Content is Border border) _ = new Appearance(window, border, key);
+        if ((key != nameof(MainWindow) && !key.EndsWith("WidgetWindow", StringComparison.Ordinal))
+            || window.Content is not Border border) return;
+        border.BorderBrush = DirectionalBorder;
+        if (key != nameof(MediaWidgetWindow)) _ = new Appearance(window, border, key);
+    }
+
+    private static Brush CreateDirectionalBorder()
+    {
+        LinearGradientBrush brush = new()
+        {
+            StartPoint = new Point(1, 0),
+            EndPoint = new Point(0, 1),
+            GradientStops = new GradientStopCollection
+            {
+                new(Color.FromArgb(0xF2, 0xDF, 0xF3, 0xFF), 0),
+                new(Color.FromArgb(0xCE, 0xA7, 0xD8, 0xFF), 0.38),
+                new(Color.FromArgb(0x66, 0x92, 0xB2, 0xDA), 0.66),
+                new(Color.FromArgb(0x30, 0x8E, 0xA4, 0xC7), 1)
+            }
+        };
+        brush.Freeze();
+        return brush;
     }
 
     private sealed class Appearance
@@ -44,6 +64,8 @@ public static class WidgetAppearanceService
         private readonly DispatcherTimer _debounce = new() { Interval = TimeSpan.FromMilliseconds(120) };
         private readonly SolidColorBrush _tint = new(Color.FromRgb(0x1F, 0x1E, 0x33));
         private BitmapSource? _wallpaper;
+        private LiveWidgetBackdrop? _liveBackdrop;
+        private readonly MenuItem _liveBlurItem;
         private double _opacity;
         private bool _closed;
         private bool _applying;
@@ -56,9 +78,10 @@ public static class WidgetAppearanceService
             _window = window;
             _border = border;
             _key = key;
-            var saved = SettingsStore.Load().BackgroundOpacities;
+            var settings = SettingsStore.Load();
+            var saved = settings.BackgroundOpacities;
             _opacity = saved is not null && saved.TryGetValue(key, out double value) && double.IsFinite(value)
-                ? Math.Clamp(value, 0, 100) : 70;
+                ? Math.Clamp(value, 0, 100) : 50;
             Slider slider = new() { Minimum = 0, Maximum = 100, Value = _opacity, Width = 180,
                 TickFrequency = 1, IsSnapToTickEnabled = true, IsMoveToPointEnabled = true };
             TextBlock label = new() { Text = $"{_opacity:0}%", Margin = new Thickness(0,0,0,6) };
@@ -70,11 +93,18 @@ public static class WidgetAppearanceService
             window.ContextMenu ??= new ContextMenu();
             window.ContextMenu.Items.Add(new Separator());
             window.ContextMenu.Items.Add(item);
+            _liveBlurItem = new MenuItem { Header = "Live background blur", IsCheckable = true };
+            window.ContextMenu.Items.Add(_liveBlurItem);
+            _liveBlurItem.Click += (_, _) =>
+            {
+                SetLiveBlur(_liveBlurItem.IsChecked);
+                Save();
+            };
             slider.ValueChanged += (_, _) =>
             {
                 _opacity = slider.Value;
                 label.Text = $"{_opacity:0}%";
-                _tint.Color = Color.FromArgb((byte)Math.Round(255 * _opacity / 100), 0x1F, 0x1E, 0x33);
+                UpdateTint();
             };
             item.SubmenuClosed += (_, _) => Save();
             window.LocationChanged += OnGeometryChanged;
@@ -82,7 +112,37 @@ public static class WidgetAppearanceService
             window.Closed += OnClosed;
             _backgroundDescriptor.AddValueChanged(border, OnBackgroundChanged);
             _debounce.Tick += (_, _) => { _debounce.Stop(); Apply(); };
+            SetLiveBlur(settings.LiveBlurWidgets?.Contains(key) == true);
             _ = LoadAsync();
+        }
+
+        private void SetLiveBlur(bool enabled)
+        {
+            _liveBlurItem.ToolTip = null;
+            if (enabled && _liveBackdrop is null)
+            {
+                try { _liveBackdrop = new LiveWidgetBackdrop(_window, _border); }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Live background blur unavailable: {ex.Message}");
+                    _liveBlurItem.ToolTip = "Live blur is unavailable. Wallpaper blur is in use.";
+                }
+            }
+            else if (!enabled)
+            {
+                _liveBackdrop?.Dispose();
+                _liveBackdrop = null;
+            }
+            _liveBlurItem.IsChecked = _liveBackdrop is not null;
+            Apply();
+        }
+
+        private void UpdateTint()
+        {
+            // Keep the layered foreground hit-testable even when the tint slider is at zero.
+            int alpha = (int)Math.Round(255 * _opacity / 100);
+            if (_liveBackdrop is not null) alpha = Math.Max(1, alpha);
+            _tint.Color = Color.FromArgb((byte)alpha, 0x1F, 0x1E, 0x33);
         }
 
         private async Task LoadAsync()
@@ -100,7 +160,7 @@ public static class WidgetAppearanceService
         private void OnBackgroundChanged(object? sender, EventArgs e)
         {
             // Timer completion flashes must not replace the frosted backing with an opaque brush.
-            if (!_applying && !_closed && _wallpaper is not null
+            if (!_applying && !_closed
                 && !ReferenceEquals(_border.Background, _currentBackground)) Apply();
         }
 
@@ -111,8 +171,9 @@ public static class WidgetAppearanceService
             DrawingGroup drawing = new();
             using (var dc = drawing.Open())
             {
-                dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0x1F,0x1E,0x33)), null, bounds);
-                if (_wallpaper is not null)
+                if (_liveBackdrop is null)
+                    dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0x1F,0x1E,0x33)), null, bounds);
+                if (_liveBackdrop is null && _wallpaper is not null)
                 {
                     Point offset = _border.TranslatePoint(new Point(), _window);
                     ImageBrush wallpaper = new(_wallpaper)
@@ -127,7 +188,7 @@ public static class WidgetAppearanceService
                     };
                     dc.DrawRectangle(wallpaper, null, bounds);
                 }
-                _tint.Color = Color.FromArgb((byte)Math.Round(255 * _opacity / 100), 0x1F, 0x1E, 0x33);
+                UpdateTint();
                 dc.DrawRectangle(_tint, null, bounds);
             }
             _applying = true;
@@ -145,6 +206,9 @@ public static class WidgetAppearanceService
             {
                 s.BackgroundOpacities ??= new();
                 s.BackgroundOpacities[_key] = _opacity;
+                s.LiveBlurWidgets ??= new();
+                if (_liveBackdrop is not null) s.LiveBlurWidgets.Add(_key);
+                else s.LiveBlurWidgets.Remove(_key);
             });
         }
 
@@ -157,6 +221,7 @@ public static class WidgetAppearanceService
             _window.Closed -= OnClosed;
             _backgroundDescriptor.RemoveValueChanged(_border, OnBackgroundChanged);
             Save();
+            _liveBackdrop?.Dispose();
         }
     }
 
